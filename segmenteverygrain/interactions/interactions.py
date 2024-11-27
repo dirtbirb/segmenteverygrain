@@ -9,13 +9,22 @@ import skimage
 
 
 class Grain(object):
-    """ Stores data and plot representation for a single grain """
-    
+    ''' Stores data and plot representation for a single grain. '''
+        
     def __init__(self, xy:list=[], data:pd.Series=None):
-        # Data
+        '''
+        Parameters
+        ----------
+        xy : list of (x, y) tuples
+            Coordinates to draw this grain as a polygon.
+        data : pd.Series (optional)
+            Row from a DataFrame containing information about this grain. 
+        '''
+        
+        # Input
         self.data = data
         self.xy = xy
-        # Region info to calculate
+        # Grain properties to calculate
         self.region_props = [
             'label',
             'area',
@@ -28,7 +37,6 @@ class Grain(object):
             'mean_intensity',
             'min_intensity'
         ]
-
         # Display
         self.normal_props = {
             'alpha': 0.6
@@ -41,12 +49,29 @@ class Grain(object):
         self.selected = False
 
     def get_polygon(self) -> shapely.Polygon:
+        ''' Return a shapely.Polygon representing the matplot patch. '''
         return shapely.Polygon(self.patch.get_path().vertices)
 
     def make_data(self, ax) -> pd.Series:
+        '''
+        Calculate grain information from image and matplot patch.
+        Overwrites self.data.
+
+        Parameters
+        ----------
+        ax : matplotlib.Axes
+            Axes instance to get the background image from.
+            Used to calculate intensity in self.data.
+
+        Returns
+        -------
+        self.data : pd.Series
+            Row for a DataFrame containing computed grain info.
+        '''
         # Get image and labeled region
         image = ax.get_images()[0].get_array()
-        label = rasterio.features.rasterize([self.get_polygon()], out_shape=image.shape[:2])
+        label = rasterio.features.rasterize(
+            [self.get_polygon()], out_shape=image.shape[:2])
         # Calculate region properties
         # TODO: Avoid going list -> DataFrame -> Series
         data = skimage.measure.regionprops_table(
@@ -56,6 +81,20 @@ class Grain(object):
         return self.data
 
     def make_patch(self, ax):
+        '''
+        Draw this grain on the provided matplotlib axes and save the result.
+
+        Parameters
+        ----------
+        ax : matplotlib.Axes
+            Axes instance on which to draw this grain.
+
+        Returns
+        -------
+        self.patch
+            Object representing this grain on the plot.
+        '''
+                
         # Create patch
         (self.patch,) = ax.fill(
             *self.xy,
@@ -71,8 +110,16 @@ class Grain(object):
             self.data = self.make_data(ax)
         return self.patch
 
-    def select(self):
-        self.selected = ~self.selected
+    def select(self) -> bool:
+        '''
+        Record whether grain is selected/unselected in a plot.
+        
+        Returns
+        -------
+        self.selected : bool
+            True if this grain is now selected.
+        '''
+        self.selected = not self.selected
         props = self.selected_props if self.selected else self.normal_props
         self.patch.set(**props)
         # if self.selected:
@@ -81,9 +128,22 @@ class Grain(object):
 
 
 class GrainPlot(object):
-    """ Interactive plot to create, delete, and merge grains """
+    ''' Interactive plot to create, delete, and merge grains. '''
 
-    def __init__(self, grains, image=None, predictor=None, figsize=(6, 4)):
+    def __init__(self, grains:list=[], image=None, predictor=None, figsize=(6, 4)):
+        '''
+        Parameters
+        ----------
+        grains : list
+            List of grains with xy data to plot over the backround image.
+        image : np.ndarray
+            Image under analysis, displayed behind identified grains.
+        predictor:
+            SAM predictor used to create new grains.
+        figsize: tuple
+            Figure size.
+        '''
+
         # Input
         self.grains = grains
         self.image = image
@@ -119,7 +179,16 @@ class GrainPlot(object):
 
     # Helper functions ---
     def set_cursor(self, cursor, xy=False):
-        """ Set left or right cursor to given location """
+        ''' 
+        Set left or right cursor to given location.
+        
+        Parameters
+        ----------
+        cusor
+            Which cursor to set (self.left_cursor or self.right_cursor).
+        xy
+            Coordinates to display cursor at. Will hide cursor if False.
+        '''
         if isinstance(xy, tuple):
             cursor.set_center(xy)
             cursor.set_visible(True)
@@ -127,35 +196,39 @@ class GrainPlot(object):
             cursor.set_visible(False)
 
     def unset_cursors(self):
-        """ Hide left an right cursors """
+        ''' Hide both left and right cursors. '''
         self.set_cursor(self.left_cursor, False)
         self.set_cursor(self.right_cursor, False)
 
     def unselect_grains(self):
-        """ Unselect all selected grains """
+        ''' Unselect all selected grains. '''
         for grain in self.selected_grains:
             grain.select()
         self.selected_grains = []
 
     def unselect_all(self):
-        """ Hide both cursors and unselect all grains """
+        ''' Hide both cursors and unselect all grains. '''
         self.unset_cursors()
         self.unselect_grains()
 
     # Manage grains ---
     def create_grain(self):
-        """ Attempt to find and add grain at left cursor """
+        ''' Attempt to find and add grain at most recent clicked position. '''
         # Verify that we've actually selected something
         if not self.left_cursor.get_visible():
             return
+        # Attempt to find new grain using given point(s)
         xy1 = self.left_cursor.get_center()
         if self.right_cursor.get_visible():
             # Two-point prompt (grain and background)
             xy2 = self.right_cursor.get_center()
-            x, y = segmenteverygrain.two_point_prompt(*xy1, *xy2, image=self.image, predictor=self.predictor)
+            x, y = segmenteverygrain.two_point_prompt(
+                *xy1, *xy2, image=self.image, predictor=self.predictor)
         else:
             # One-point prompt (grain only)
-            x, y, mask = segmenteverygrain.one_point_prompt(*xy1, image=self.image, predictor=self.predictor)
+            # TODO: Unsure why this returns a mask but two_point doesn't
+            x, y, mask = segmenteverygrain.one_point_prompt(
+                *xy1, image=self.image, predictor=self.predictor)
         # Record new grain (plot, data, and undo list)
         grain = Grain((x, y))
         grain.make_patch(self.ax)
@@ -165,10 +238,10 @@ class GrainPlot(object):
         self.unset_cursors()
 
     def delete_grains(self):
-        """ Delete all selected grains """
+        ''' Delete all selected grains. '''
         with plt.ioff():
             for grain in self.selected_grains:
-                # Remove grain frmo plot, data, and undo list
+                # Remove grain from plot, data, and undo list
                 grain.patch.remove()
                 self.grains.remove(grain)
                 if grain in self.created_grains:
@@ -178,7 +251,7 @@ class GrainPlot(object):
         self.unset_cursors()
 
     def merge_grains(self):
-        """ Merge all selected grains """
+        ''' Merge all selected grains. '''
         # Verify there are at least two grains to merge
         if len(self.selected_grains) < 2:
             return
@@ -197,7 +270,8 @@ class GrainPlot(object):
         self.delete_grains()
 
     def undo_grain(self):
-        """ Remove latest created grain """
+        ''' Remove latest created grain. '''
+        # TODO: Also allow undoing grain deletions
         # Verify that there is a grain to undo
         if len(self.created_grains) < 1:
             return
@@ -208,9 +282,19 @@ class GrainPlot(object):
 
     # Events ---
     def onclick(self, event):
-        """ Handle clicking anywhere on plot """
-        # Only individual clicks, only if not handled by onpick, only when no grains selected
-        if event.dblclick is True or event is self.last_pick or len(self.selected_grains) > 0:
+        ''' Handle clicking anywhere on plot.
+        
+        Parameters
+        ----------
+        event
+            Matplotlib mouseevent (different than normal event!)
+        '''
+        # Only individual clicks
+        # Only if not handled by onpick (didn't select a grain)
+        # Only when no grains selected
+        if (event.dblclick is True
+            or event is self.last_pick
+            or len(self.selected_grains) > 0):
             return
         # Left click: set grain prompt
         if event.button == 1:
@@ -220,9 +304,15 @@ class GrainPlot(object):
             self.set_cursor(self.right_cursor, (event.xdata, event.ydata))
 
     def onpick(self, event):
-        """ Handle clicking on an existing grain """
+        '''
+        Handle clicking on an existing grain to select/unselect it.
+        
+        Parameters
+        ----------
+        event
+            Matplotlib event
+        '''
         # Only individual left-clicks
-        print("picked!")
         mouseevent = event.mouseevent
         if mouseevent.dblclick or mouseevent.button != 1:
             return
@@ -230,7 +320,7 @@ class GrainPlot(object):
         self.last_pick = mouseevent
         # Hide cursors
         self.unset_cursors()
-        # Add selected grain to selection list
+        # Add/remove selected grain to/from selection list
         for grain in self.grains:
             if event.artist is grain.patch:
                 if grain.select():
@@ -240,7 +330,14 @@ class GrainPlot(object):
                 break
     
     def onpress(self, event):
-        """ Handle key presses """
+        ''' 
+        Handle key presses.
+        
+        Parameters
+        ----------
+        event
+            Matplotlib event
+        '''
         if event.key == 'c':
             self.create_grain()
         elif event.key == 'd' or event.key == 'delete':
@@ -260,22 +357,22 @@ class GrainPlot(object):
         #     self.canvas.flush_events()
 
     def activate(self):
-        """ Enable interactive features """
+        ''' Enable interactive features (clicking, etc). '''
         for event, handler in self.events.items():
             self.cids.append(self.canvas.mpl_connect(event, handler))
 
     def deactivate(self):
-        """ Disable interactive features """
+        ''' Disable interactive features (clicking, etc). '''
         for cid in self.cids:
             self.canvas.mpl_disconnect(cid)
         self.cids = []
     
     # Output ---
     def get_mask(self):
-        """ Return labeled image for Unet training """
+        ''' Return labeled image for Unet training. '''
         all_grains = [g.get_polygon() for g in self.grains]
         return segmenteverygrain.create_labeled_image(all_grains, self.image)
 
     def get_data(self) -> pd.DataFrame:
-        """ Return up-to-date DataFrame of grain stats """
+        ''' Return up-to-date DataFrame of grain stats. '''
         return pd.concat([g.data for g in self.grains], axis=1).T
