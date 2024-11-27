@@ -1,12 +1,16 @@
-# Setup ---
+# Matplotlib backend
+import matplotlib
+matplotlib.use('agg')
 
 # Imports
+# TODO: Silence torch/tensorflow/whatever warnings on import
 import cv2
 import glob
 import keras.saving
 import keras.utils
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import segment_anything
 import segmenteverygrain
 
@@ -33,7 +37,7 @@ sam = segment_anything.sam_model_registry['default'](checkpoint='./sam_vit_h_4b8
     # sam.to(device='cuda')
 
 # Main loop
-fnames = sorted(glob(indir + '*.jpeg'))
+fnames = sorted(glob.glob(indir + '*.jpg'))
 print(f'\nFound {len(fnames)} image(s). Segmenting...\n')
 for fname in fnames:
     # Load image
@@ -43,7 +47,7 @@ for fname in fnames:
     
     # Unet ---
     # Generate prompts
-    print('UNET ---')
+    print('UNET -')
     image_pred = segmenteverygrain.predict_image(image, unet, I=256)
     unet_labels, coords = segmenteverygrain.label_grains(image, image_pred, dbs_max_dist=20.0)
     # Save unet results for verification
@@ -53,32 +57,35 @@ for fname in fnames:
     plt.scatter(np.array(coords)[:,0], np.array(coords)[:,1], c='k')
     plt.xticks([])
     plt.yticks([])
-    fig.savefig(outname + 'unet.jpg')
+    fig.savefig(outname + 'unet.jpg', bbox_inches="tight")
     plt.close()
 
     # SAM ---
-    print('SAM ---')
+    print('SAM -')
     # TODO: Separate this function into smaller chunks (plotting, mask, etc)
     # TODO: Choose min_area by image size? Do unit conversion from pixels first?
     all_grains, sam_labels, mask_all, grain_data, fig, ax = segmenteverygrain.sam_segmentation(
         sam, image, image_pred, coords, unet_labels,
         min_area=400.0, plot_image=True, remove_edge_grains=False, remove_large_objects=False)
-    fig.savefig(outname + 'sam.jpg')
+    fig.savefig(outname + 'sam.jpg', bbox_inches="tight")
     plt.close()
 
     # Results ---
     print('Saving...')
+    outname += 'sam_'
+    # Grain info (for redrawing later)
+    pd.DataFrame(all_grains).to_csv(outname + 'grains.csv')
+    # Grain summary
     # TODO: Convert from pixels to real units
     for col in ['major_axis_length', 'minor_axis_length', 'perimeter', 'area']:
         grain_data[col] *= units_per_pixel
-    # csv
-    grain_data.to_csv(outname + 'sam.csv')
+    grain_data.to_csv(outname + 'summary.csv')
     # Histogram
     fig, ax = segmenteverygrain.plot_histogram_of_axis_lengths(grain_data['major_axis_length']/1000, grain_data['minor_axis_length']/1000)
     fig.savefig(outname + 'histogram.jpg')
+    plt.close()
     # Mask and image
     rasterized_image, mask = segmenteverygrain.create_labeled_image(all_grains, image)
-    outname += '_sam_'
     # TODO: Remove opencv dependency?
     cv2.imwrite(outname + 'mask.png', mask)
     cv2.imwrite(outname + 'verify.png', mask*127)
