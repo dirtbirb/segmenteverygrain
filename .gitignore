@@ -1,7 +1,7 @@
 # SegmentEveryGrain stuff
 images/
 patches/
-hawaii/
+output/
 
 # PyTorch models
 *.pth
