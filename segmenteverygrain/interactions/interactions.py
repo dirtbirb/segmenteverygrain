@@ -239,13 +239,12 @@ class GrainPlot(object):
 
     def delete_grains(self):
         ''' Delete all selected grains. '''
-        with plt.ioff():
-            for grain in self.selected_grains:
-                # Remove grain from plot, data, and undo list
-                grain.patch.remove()
-                self.grains.remove(grain)
-                if grain in self.created_grains:
-                    self.created_grains.remove(grain)
+        for grain in self.selected_grains:
+            # Remove grain from plot, data, and undo list
+            grain.patch.remove()
+            self.grains.remove(grain)
+            if grain in self.created_grains:
+                self.created_grains.remove(grain)
         self.selected_grains = []
         # Reset cursors
         self.unset_cursors()
