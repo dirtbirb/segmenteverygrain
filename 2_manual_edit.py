@@ -2,7 +2,7 @@
 
 import matplotlib
 # HACK: Can't use qt due to conflict between matplotlib and opencv/keras
-matplotlib.use('gtk4agg')
+matplotlib.use('tkagg')
 
 import cv2
 import glob
@@ -25,7 +25,13 @@ sam = segment_anything.sam_model_registry["default"](checkpoint="./sam_vit_h_4b8
 
 # Processing ---
 
-fnames = sorted(glob.glob(img_dir + '*.jpg'))
+# USE THIS LINE TO CYCLE THROUGH ALL THE IMAGES --
+# fnames = sorted(glob.glob(img_dir + '*.png'))
+# USE THIS LINE TO SPECIFY JUST ONE IMAGE --
+# fnames = [img_dir + 'image_name_goes_here.png']
+# USE THIS ONE --------------------------------------------------------------------
+fnames = [img_dir + 'DJI_060800.png'] # <------------------------------------------
+# ---------------------------------------------------------------------------------
 print(f'\nFound {len(fnames)} image(s). Editing...\n')
 for fn in fnames:
     print(f'--- {fn} ---')
