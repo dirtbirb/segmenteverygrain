@@ -1,7 +1,7 @@
 # SegmentEveryGrain stuff
-images/
-patches/
-output/
+1_input/*
+2_sam_results/*
+3_edited_results/*
 
 # PyTorch models
 *.pth
