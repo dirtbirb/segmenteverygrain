@@ -54,6 +54,7 @@ class RootLayout(BoxLayout):
         pass
 
     def manual_segment(self):
+        # Display editing interface
         Logger.info('Displaying plot...')
         self.figure = si.GrainPlot(
             self.grains, 
@@ -69,33 +70,6 @@ class RootLayout(BoxLayout):
         # Show save dialog
         Logger.info('Saving...')
         self.show_save()
-
-        # fn = out_dir + fn.split('/')[-1] + '_edited'
-        # grain_plot.fig.savefig(fn + '.jpg')
-        
-        # # Get new grain_data and all_grains
-        # new_all_grains = [g.get_polygon() for g in grain_plot.grains]
-        # new_grain_data = grain_plot.get_data()
-        # plt.close(grain_plot.fig)
-        
-        # # Convert units
-        # # TODO: Convert from pixels to real units
-        # n_of_units = 1000
-        # units_per_pixel = n_of_units/1552.77 # length of scale bar in pixels
-        # for col in ['major_axis_length', 'minor_axis_length', 'perimeter', 'area']:
-        #     new_grain_data[col] *= units_per_pixel
-        # new_grain_data.to_csv(fn + '_summary.csv')
-        # pd.DataFrame(new_all_grains).to_csv(fn + '_grains.csv')
-        
-        # # Save CSVs and histogram
-        # fig, ax = segmenteverygrain.plot_histogram_of_axis_lengths(new_grain_data['major_axis_length']/1000, new_grain_data['minor_axis_length']/1000)
-        # fig.savefig(fn + '_histogram.jpg')
-        # plt.close(fig)
-        
-        # # Save mask for Unet training
-        # rasterized_image, mask = grain_plot.get_mask()
-        # cv2.imwrite(fn + '_mask.png', mask)
-        # cv2.imwrite(fn + '_mask_visible.png', mask*127)
 
     # Save/load --------------------------------------------------------------
     def load_data(self, path, filename):
@@ -143,6 +117,36 @@ class RootLayout(BoxLayout):
         self.unet_fn = os.path.basename(filename)
         self._popup.dismiss()
 
+    def save(self):
+        pass
+        # # Save image with highlighted grains
+        # fn = out_dir + fn.split('/')[-1] + '_edited'
+        # grain_plot.fig.savefig(fn + '.jpg')
+        
+        # # Get new grain_data and all_grains
+        # new_all_grains = [g.get_polygon() for g in grain_plot.grains]
+        # new_grain_data = grain_plot.get_data()
+        # plt.close(grain_plot.fig)
+        
+        # # Convert units
+        # # TODO: Convert from pixels to real units
+        # n_of_units = 1000
+        # units_per_pixel = n_of_units/1552.77 # length of scale bar in pixels
+        # for col in ['major_axis_length', 'minor_axis_length', 'perimeter', 'area']:
+        #     new_grain_data[col] *= units_per_pixel
+        # new_grain_data.to_csv(fn + '_summary.csv')
+        # pd.DataFrame(new_all_grains).to_csv(fn + '_grains.csv')
+        
+        # # Save CSVs and histogram
+        # fig, ax = segmenteverygrain.plot_histogram_of_axis_lengths(new_grain_data['major_axis_length']/1000, new_grain_data['minor_axis_length']/1000)
+        # fig.savefig(fn + '_histogram.jpg')
+        # plt.close(fig)
+        
+        # # Save mask for Unet training
+        # rasterized_image, mask = grain_plot.get_mask()
+        # cv2.imwrite(fn + '_mask.png', mask)
+        # cv2.imwrite(fn + '_mask_visible.png', mask*127)
+
     # Popups -----------------------------------------------------------------
     def dismiss_popup(self):
         self._popup.dismiss()
@@ -167,7 +171,8 @@ class RootLayout(BoxLayout):
         self.show_dialog(dialog, title='Load grain data', filters=['*.csv'])
 
     def show_save(self):
-        pass
+        dialog = SaveDialog(save=self.save, cancel=self.dismiss_popup)
+        self.show_dialog(dialog, title='Save results')
 
 
 class SegmentApp(App):
