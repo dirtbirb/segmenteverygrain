@@ -15,11 +15,11 @@
             path: '.'
         Row:
             Button:
-                text: 'Cancel'
-                on_release: root.cancel()
-            Button:
                 text: 'Load'
                 on_release: root.load(filechooser.path, filechooser.selection[0])
+            Button:
+                text: 'Cancel'
+                on_release: root.cancel()
 
 <SaveDialog>:
     text_input: text_input
@@ -27,23 +27,25 @@
         size: root.size
         pos: root.pos
         orientation: 'vertical'
+        Row:
+            Label:
+                text: 'Choose a name and location for output files (no file extension)'
         FileChooserListView:
             id: filechooser
-            path: '.'
+            path: root.path
             on_selection: text_input.text = self.selection and self.selection[0] or ''
-        TextInput:
-            id: text_input
-            size_hint_y: None
-            height: 30
-            multiline: False
         Row:
-            Button:
-                text: 'Cancel'
-                on_release: root.cancel()
-
+            TextInput:
+                id: text_input
+                text: root.filename
+                multiline: False
+        Row:
             Button:
                 text: 'Save'
                 on_release: root.save(filechooser.path, text_input.text)
+            Button:
+                text: 'Cancel'
+                on_release: root.cancel()
 
 <RootLayout>
     orientation: 'vertical'
@@ -51,36 +53,43 @@
         Label:
             text: 'GrainTrainer2025'
     Row:
+        Label:
+            text: 'Unet model'
         Button:
-            text: 'Load Unet model'
+            text: root.unet_fn or 'Load'
             on_release: root.show_load_unet()
-        Label:
-            text: root.unet_fn
     Row:
-        Button:
-            text: 'Load image'
-            on_release: root.show_load_image()
         Label:
-            text: root.image_fn
+            text: 'SAM checkpoint'
+        Button:
+            text: root.sam_checkpoint_fn or 'Load'
+            on_release: root.show_load_checkpoint()
+    Row:
+        Label:
+            text: 'Image'
+        Button:
+            text: root.image_fn or 'Load'
+            on_release: root.show_load_image()
     Row:
         height: 60
-        Button:
-            text: 'Load data'
-            on_release: root.show_load_data()
         Label:
-            text: f'Grains: {root.grains_fn}\nData: {root.summary_fn}'
+            text: 'Data'
+        Button:
+            text: f'Grains: {root.grains_fn}\nData: {root.summary_fn}' if root.grains_fn else 'Load'
+            on_release: root.show_load_data()
+    # Image goes here!
     Row:
         Label:
             text: 'Segmentation'
     Row:
         height: 60
         Button:
-            text: 'Auto'
+            text: 'Autosegment'
             disabled: root.unet_model is None or root.image is None
             on_release: root.auto_segment()
         Button:
-            text: 'Manual'
-            disabled: root.unet_model is None or root.image is None or len(root.grains) == 0 or len(root.grains) != len(root.summary)  
+            text: 'Interactive'
+            disabled: root.unet_model is None or root.image is None 
             on_release: root.manual_segment()
 
 RootLayout:
