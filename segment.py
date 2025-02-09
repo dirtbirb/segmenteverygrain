@@ -160,17 +160,20 @@ class RootLayout(BoxLayout):
         self.dismiss_popup()
         Logger.info(f'Loaded {self.unet_fn}.')  
 
-    def save_grain_image(self, path, filename):
+    def save_grain_image(self, filename):
         Logger.info('Saving grain image...')
         self.plot.fig.savefig(filename)
         self.dismiss_popup()
         Logger.info(f'Saved {filename}.')
 
-    def save_grains(self, path, filename):
+    def save_grains(self, filename):
+        Logger.info('Saving grain data...')
         grains = [g.get_polygon() for g in self.plot.grains]
         pd.DataFrame(grains).to_csv(filename)
+        Logger.info(f'Saved {filename}.')
 
-    def save_summary(self, path, filename):
+    def save_summary(self, filename):
+        Logger.info('Saving summary data...')
         # Get measurements from plot as a pd.DataFrame
         grain_data = self.plot.get_data()
         # Convert units
@@ -181,22 +184,29 @@ class RootLayout(BoxLayout):
             grain_data[col] *= units_per_pixel
         # Save CSV
         grain_data.to_csv(filename)
+        Logger.info(f'Saved {filename}.')
         # Build and save histogram
+        filename = filename.split('.')[0] + '.jpg'
         fig, ax = segmenteverygrain.plot_histogram_of_axis_lengths(
             grain_data['major_axis_length']/1000, 
             grain_data['minor_axis_length']/1000)
-        fig.savefig(filename.split('.')[0] + '.jpg')
+        fig.savefig(filename)
         plt.close(fig)
+        Logger.info(f'Saved {filename}.')
 
-    def save_mask(self, path, filename):
+    def save_mask(self, filename):
+        Logger.info('Saving mask...')
         rasterized_image, mask = self.plot.get_mask()
         # keras.utils.save_img(filename, mask)
         # keras.utils.save_img(filename.split('.')[0] + '_visible.png', mask*127)
         cv2.imwrite(filename, mask)
+        Logger.info(f'Saved {filename}.')
         cv2.imwrite(filename.split('.')[0] + '_visible.png', mask*127)
+        Logger.info(f'Saved {filename}.')
 
-    def save_unet_image(self, path, filename):
+    def save_unet_image(self, filename):
         # Save unet results for verification (auto segmenting!)
+        Logger.info(f'Saving unet image...')
         fig, ax = plt.subplots(figsize=FIGSIZE)
         ax.set_aspect('equal')
         ax.imshow(image_pred)
@@ -204,22 +214,26 @@ class RootLayout(BoxLayout):
         ax.set(xticks=[], yticks=[])
         fig.savefig(outname + '_unet.jpg')
         plt.close(fig)
+        Logger.info(f'Saved {filename}.')
 
     def save(self, path, filename):
-        print('old: ' + path + filename)
-        # Remove any file extension
+        ''' 
+        Save all results via save_whatever method for each type of data.
+        '''
+        Logger.info('\n--- Results ---')
+        # Parse filename -- include path, remove extension
         filename = os.path.join(path, filename.split('.')[0])
-        print('new: ' + filename)
-        Logger.info('Saving...')
-        self.save_grains(path, filename + '_grains.csv')
-        self.save_summary(path, filename + '_summary.csv')
-        self.save_mask(path, filename + '_mask.png')
-        self.save_grain_image(path, filename + '_highlighted.png')
-        # self.save_histogram(path, filename + '_distribution.png')
+        # Save results
+        self.save_grains(filename + '_grains.csv')
+        self.save_summary(filename + '_summary.csv')
+        if self.unet_image:
+            self.save_unet_image(filename + '_unet.jpg')
+        self.save_mask(filename + '_mask.png')
+        self.save_grain_image(filename + '_highlighted.png')
         # Close plot
         plt.close(self.plot.fig)
         self.dismiss_popup()
-        Logger.info(f'Saved results to path {path}.')
+        Logger.info('Save complete!')
 
     # Popups -----------------------------------------------------------------
     def dismiss_popup(self):
