@@ -14,13 +14,15 @@ import kivy
 kivy.require('2.3.1')
 from kivy.logger import Logger, LOG_LEVELS
 from kivy_garden.matplotlib.backend_kivyagg import FigureCanvasKivyAgg
-from kivy.properties import ListProperty, ObjectProperty, StringProperty
-from kivy.uix.popup import Popup
-from kivy.uix.boxlayout import BoxLayout
-from kivy.app import App
 
-# TODO: fix matplot / kivy log levels
-# plt.set_loglevel('error')
+
+# HACK: Turn off crazy debug output
+import logging
+for logger in [logging.getLogger(name) for name in logging.root.manager.loggerDict]:
+    if logger.level == 0:
+        logger.setLevel(30)
+
+
 FIGSIZE = (12, 8)
 
 
