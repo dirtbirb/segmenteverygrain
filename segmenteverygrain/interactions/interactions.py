@@ -1,3 +1,4 @@
+import matplotlib as mpl
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
@@ -6,6 +7,11 @@ import rasterio.features
 import segmenteverygrain
 import shapely
 import skimage
+
+
+# Don't reset zoom level when pressing 'c' to create a grain
+if 'c' in mpl.rcParams['keymap.back']:
+    mpl.rcParams['keymap.back'].remove('c')
 
 
 class Grain(object):
