@@ -77,7 +77,9 @@
         Button:
             text: f'Grains: {root.grains_fn}\nData: {root.summary_fn}' if root.grains_fn else 'Load'
             on_release: root.show_load_data()
-    # Image goes here!
+    Image:
+        size_hint_y: 10
+        id: image
     Row:
         Label:
             text: 'Segmentation'

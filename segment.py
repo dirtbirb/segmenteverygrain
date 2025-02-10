@@ -137,6 +137,7 @@ class RootLayout(BoxLayout):
     def load_image(self, path, filename):
         Logger.info('Loading image...')
         self.image = np.array(keras.utils.load_img(filename))
+        self.ids.image.source = filename
         self.image_fn = os.path.basename(filename)
         self.dismiss_popup()
         Logger.info(f'Loaded {self.image_fn}.')
@@ -162,7 +163,7 @@ class RootLayout(BoxLayout):
 
     def save_grain_image(self, filename):
         Logger.info('Saving grain image...')
-        self.plot.fig.savefig(filename)
+        self.ids.image.source = filename
         self.dismiss_popup()
         Logger.info(f'Saved {filename}.')
 
