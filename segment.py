@@ -64,24 +64,28 @@ class RootLayout(BoxLayout):
 
     # Segmentation -----------------------------------------------------------
     def auto_segment(self):
-        # # Unet ---
-        # # Generate prompts
-        # print('UNET -')
-        # image_pred = segmenteverygrain.predict_image(image, unet, I=256)
-        # unet_labels, coords = segmenteverygrain.label_grains(image, image_pred, dbs_max_dist=20.0)
+        Logger.info('\n--- Auto-segmenting ---')
 
-        # # SAM ---
-        # print('SAM ---')
-        # outname += '_sam_'
-        # # TODO: Separate this function into smaller chunks (plotting, mask, etc)
-        # # TODO: Choose min_area by image size? Do unit conversion from pixels first?
-        # all_grains, sam_labels, mask_all, grain_data, fig, ax = segmenteverygrain.sam_segmentation(
-        #     sam, image, image_pred, coords, unet_labels,
-        #     min_area=MIN_AREA, plot_image=False, remove_edge_grains=False, remove_large_objects=False)
-        # plt.close(fig)
+        # Generate prompts with UNET model
+        Logger.info('\nUNET prediction')
+        self.unet_image = segmenteverygrain.predict_image(
+            self.image, self.unet_model, I=256)
+        unet_labels, self.unet_coords = segmenteverygrain.label_grains(
+            self.image, self.unet_image, dbs_max_dist=20.0)
 
-        Logger.info('Saving...')
-        self.show_auto_save()
+        # Apply SAM for actual segmentation
+        Logger.info('\nSAM segmenting')
+        # TODO: Separate this function into smaller chautunks (plotting, mask, etc)
+        # TODO: Choose min_area by image size? Do unit conversion from pixels first?
+        self.grains, sam_labels, mask_all, self.summary, fig, ax = segmenteverygrain.sam_segmentation(
+            self.sam, self.image, self.unet_image, self.unet_coords, unet_labels,
+            min_area=MIN_AREA, plot_image=False, remove_edge_grains=False, remove_large_objects=False)
+        plt.close(fig)
+
+        # Update GUI and show save dialog
+        Logger.info('\nAuto-segmenting complete!\n')
+        self.update_data_labels('Calculated!')
+        self.show_save()
 
     def manual_segment(self):
         # Prepare SAM predictor
