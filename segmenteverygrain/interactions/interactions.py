@@ -307,6 +307,8 @@ class GrainPlot(object):
         # Right click: set background prompt
         elif event.button == 3:
             self.set_cursor(self.right_cursor, (event.xdata, event.ydata))
+        # Draw results to canvas (necessary if plot is shown twice)
+        self.canvas.draw_idle()
 
     def onpick(self, event):
         '''
@@ -333,6 +335,8 @@ class GrainPlot(object):
                 else:
                     self.selected_grains.remove(grain)
                 break
+        # Draw results to canvas (necessary if plot is shown twice)
+        self.canvas.draw_idle()
     
     def onpress(self, event):
         ''' 
@@ -353,13 +357,10 @@ class GrainPlot(object):
             self.undo_grain()
         elif event.key == 'escape':
             self.unselect_all()
-        # TODO: Handle occasional drawing failures by forcing a GUI update
-        # elif event.key == 'f':
-        #     bg = self.canvas.copy_from_bbox(self.fig.bbox)
-        #     self.canvas.restore_region(bg)
-        #     self.canvas.blit(self.fig.bbox)
-        #     # self.canvas.draw()
-        #     self.canvas.flush_events()
+        else:
+            return
+        # Draw results to canvas (necessary if plot is shown twice)
+        self.canvas.draw_idle()
 
     def activate(self):
         ''' Enable interactive features (clicking, etc). '''
