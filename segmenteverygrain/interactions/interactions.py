@@ -173,7 +173,7 @@ class GrainPlot(object):
         if isinstance(image, np.ndarray):
             self.ax.imshow(image)
             self.ax.autoscale(enable=False)
-        self.fig.tight_layout()
+        self.fig.tight_layout(pad=0)
         # Draw elements on plot without updating after each one
         with plt.ioff():
             for grain in grains:
