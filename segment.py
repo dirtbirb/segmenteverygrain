@@ -271,7 +271,7 @@ class RootLayout(BoxLayout):
 
 class SegmentApp(App):
     ''' Layout defined in segment.kv '''
-    pass
+    title = 'GrainTrainer2025'
 
 
 # Logger.setLevel(LOG_LEVELS['error'])
