@@ -163,6 +163,7 @@ class RootLayout(BoxLayout):
 
     def save_grain_image(self, filename):
         Logger.info('Saving grain image...')
+        self.plot.fig.savefig(filename, bbox_inches='tight', pad_inches=0)
         self.ids.image.source = filename
         self.dismiss_popup()
         Logger.info(f'Saved {filename}.')
@@ -191,7 +192,7 @@ class RootLayout(BoxLayout):
         fig, ax = segmenteverygrain.plot_histogram_of_axis_lengths(
             grain_data['major_axis_length']/1000, 
             grain_data['minor_axis_length']/1000)
-        fig.savefig(filename)
+        fig.savefig(filename, bbox_inches='tight', pad_inches=0)
         plt.close(fig)
         Logger.info(f'Saved {filename}.')
 
@@ -213,7 +214,7 @@ class RootLayout(BoxLayout):
         ax.imshow(image_pred)
         plt.scatter(np.array(coords)[:,0], np.array(coords)[:,1], c='k')
         ax.set(xticks=[], yticks=[])
-        fig.savefig(outname + '_unet.jpg')
+        fig.savefig(filename, bbox_inches='tight', pad_inches=0)
         plt.close(fig)
         Logger.info(f'Saved {filename}.')
 
