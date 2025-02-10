@@ -13,6 +13,7 @@ import segmenteverygrain.interactions as si
 import kivy
 kivy.require('2.3.1')
 from kivy.logger import Logger, LOG_LEVELS
+from kivy.properties import BooleanProperty, ListProperty, ObjectProperty, StringProperty
 from kivy_garden.matplotlib.backend_kivyagg import FigureCanvasKivyAgg
 
 
@@ -44,7 +45,7 @@ class RootLayout(BoxLayout):
     plot = ObjectProperty()
     figure = ObjectProperty()
     predictor = ObjectProperty()
-    _popup = ObjectProperty()
+    predictor_stale = BooleanProperty(True)
     # User settables
     grains = ListProperty()
     grains_fn = StringProperty()
@@ -89,8 +90,10 @@ class RootLayout(BoxLayout):
 
     def manual_segment(self):
         # Prepare SAM predictor
-        Logger.info('Preparing SAM predictor...')
-        self.predictor.set_image(self.image)
+        if self.predictor_stale:
+            Logger.info('Preparing SAM predictor...')
+            self.predictor.set_image(self.image)
+            self.predictor_stale = False
         
         # Display editing interface
         Logger.info('Displaying interactive interface...')
@@ -146,6 +149,8 @@ class RootLayout(BoxLayout):
         self.ids.image.source = filename
         self.image_fn = os.path.basename(filename)
         self.dismiss_popup()
+        # Update image predictor next time manual editing is used
+        self.predictor_stale = True
         Logger.info(f'Loaded {self.image_fn}.')
 
     def load_summary_data(self, path, filename):
