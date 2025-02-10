@@ -12,8 +12,11 @@ import segmenteverygrain.interactions as si
 
 import kivy
 kivy.require('2.3.1')
+from kivy.app import App
 from kivy.logger import Logger, LOG_LEVELS
 from kivy.properties import BooleanProperty, ListProperty, ObjectProperty, StringProperty
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.popup import Popup
 from kivy_garden.matplotlib.backend_kivyagg import FigureCanvasKivyAgg
 
 
@@ -25,25 +28,27 @@ for logger in [logging.getLogger(name) for name in logging.root.manager.loggerDi
 
 
 FIGSIZE = (12, 8)
+MIN_AREA = 400
 
 
 class LoadDialog(BoxLayout):
-    load = ObjectProperty()
     cancel = ObjectProperty()
+    load = ObjectProperty()
 
 
 class SaveDialog(BoxLayout):
-    save = ObjectProperty()
-    path = StringProperty()
-    filename = StringProperty()
-    text_input = ObjectProperty()
     cancel = ObjectProperty()
+    filename = StringProperty()
+    path = StringProperty()
+    save = ObjectProperty()
+    text_input = ObjectProperty()
 
 
 class RootLayout(BoxLayout):
     # Internal properties
-    plot = ObjectProperty()
-    figure = ObjectProperty()
+    _popup = ObjectProperty()
+    # mask = ObjectProperty(allownone=True)
+    plot = ObjectProperty(allownone=True)
     predictor = ObjectProperty()
     predictor_stale = BooleanProperty(True)
     # User settables
@@ -53,8 +58,9 @@ class RootLayout(BoxLayout):
     image_fn = StringProperty()
     sam = ObjectProperty()
     sam_checkpoint_fn = StringProperty()
-    summary = ObjectProperty()
+    summary = ObjectProperty(allownone=True)
     summary_fn = StringProperty()
+    unet_image = ObjectProperty()
     unet_model = ObjectProperty()
     unet_fn = StringProperty()
 
@@ -62,6 +68,11 @@ class RootLayout(BoxLayout):
     def on_kv_post(self, widget):
         self.load_sam_checkpoint('', './sam_vit_h_4b8939.pth')
         self.load_unet('', './segmenteverygrain/seg_model.keras')
+        self.update_data_labels()
+
+    def update_data_labels(self, text='-'):
+        self.grains_fn = text
+        self.summary_fn = text
 
     # Segmentation -----------------------------------------------------------
     def auto_segment(self):
@@ -89,6 +100,9 @@ class RootLayout(BoxLayout):
         self.show_save()
 
     def manual_segment(self):
+        Logger.info('\n--- Manual editing ---')
+        plt.close('all')
+
         # Prepare SAM predictor
         if self.predictor_stale:
             Logger.info('Preparing SAM predictor...')
@@ -100,7 +114,7 @@ class RootLayout(BoxLayout):
         self.plot = si.GrainPlot(
             self.grains, 
             image=self.image, 
-            predictor=self.predictor, 
+            predictor=self.predictor,
             figsize=FIGSIZE
         )
         self.plot.activate()
@@ -108,18 +122,11 @@ class RootLayout(BoxLayout):
             plt.show(block=True)
         self.plot.deactivate()
 
-        # Show save dialog
+        # Update GUI and show save dialog
+        self.update_data_labels('Edited!')
         self.show_save()
 
     # Save/load --------------------------------------------------------------
-    def load_sam_checkpoint(self, path, filename):
-        Logger.info('Loading checkpoint...')
-        self.sam = segment_anything.sam_model_registry["default"](checkpoint=filename)
-        self.sam_checkpoint_fn = os.path.basename(filename)
-        self.predictor = segment_anything.SamPredictor(self.sam)
-        self.dismiss_popup()
-        Logger.info(f'Loaded checkpoint {self.sam_checkpoint_fn}.')
-
     def load_data(self, path, filename):
         # Load grain data
         self.load_grain_data(path, filename)
@@ -151,10 +158,23 @@ class RootLayout(BoxLayout):
         self.dismiss_popup()
         # Update image predictor next time manual editing is used
         self.predictor_stale = True
+        # Clear grains and summary data, probably applied to a different image
+        self.grains = []
+        self.summary = None
+        self.update_data_labels()
         Logger.info(f'Loaded {self.image_fn}.')
+
+    def load_sam_checkpoint(self, path, filename):
+        Logger.info('Loading checkpoint...')
+        self.sam = segment_anything.sam_model_registry["default"](checkpoint=filename)
+        self.sam_checkpoint_fn = os.path.basename(filename)
+        self.predictor = segment_anything.SamPredictor(self.sam)
+        self.dismiss_popup()
+        Logger.info(f'Loaded checkpoint {self.sam_checkpoint_fn}.')
 
     def load_summary_data(self, path, filename):
         ''' Triggered after loading grains '''
+        # TODO: rebuild data, don't require loading it in?
         Logger.info('Loading data...')
         self.summary = pd.read_csv(filename).drop('Unnamed: 0', axis=1)
         self.summary_fn = os.path.basename(filename)
@@ -181,9 +201,23 @@ class RootLayout(BoxLayout):
 
     def save_grains(self, filename):
         Logger.info('Saving grain data...')
-        grains = [g.get_polygon() for g in self.plot.grains]
-        pd.DataFrame(grains).to_csv(filename)
+        pd.DataFrame([g.get_polygon() for g in self.plot.grains]).to_csv(filename)
         Logger.info(f'Saved {filename}.')
+
+    # def save_mask(self, filename):
+    #     Logger.info('Saving mask...')
+    #     rasterized_image, self.mask = self.plot.get_mask()
+    #     try:
+    #         print(mask.shape)
+    #         mask = mask
+    #         keras.utils.save_img(filename, mask)
+    #         keras.utils.save_img(filename.split('.')[0] + '_visible.png', mask*127)
+    #     except:
+    #         pass
+    #     cv2.imwrite(filename, mask)
+    #     Logger.info(f'Saved {filename}.')
+    #     cv2.imwrite(filename.split('.')[0] + '_visible.png', mask*127)
+    #     Logger.info(f'Saved {filename}.')
 
     def save_summary(self, filename):
         Logger.info('Saving summary data...')
@@ -207,23 +241,17 @@ class RootLayout(BoxLayout):
         plt.close(fig)
         Logger.info(f'Saved {filename}.')
 
-    def save_mask(self, filename):
-        Logger.info('Saving mask...')
-        rasterized_image, mask = self.plot.get_mask()
-        # keras.utils.save_img(filename, mask)
-        # keras.utils.save_img(filename.split('.')[0] + '_visible.png', mask*127)
-        cv2.imwrite(filename, mask)
-        Logger.info(f'Saved {filename}.')
-        cv2.imwrite(filename.split('.')[0] + '_visible.png', mask*127)
-        Logger.info(f'Saved {filename}.')
-
     def save_unet_image(self, filename):
         # Save unet results for verification (auto segmenting!)
         Logger.info(f'Saving unet image...')
         fig, ax = plt.subplots(figsize=FIGSIZE)
         ax.set_aspect('equal')
-        ax.imshow(image_pred)
-        plt.scatter(np.array(coords)[:,0], np.array(coords)[:,1], c='k')
+        ax.imshow(self.unet_image)
+        plt.scatter(
+            np.array(self.unet_coords)[:,0],
+            np.array(self.unet_coords)[:,1],
+            c='k'
+        )
         ax.set(xticks=[], yticks=[])
         fig.savefig(filename, bbox_inches='tight', pad_inches=0)
         plt.close(fig)
@@ -234,14 +262,14 @@ class RootLayout(BoxLayout):
         Save all results via save_whatever method for each type of data.
         '''
         Logger.info('\n--- Results ---')
-        # Parse filename -- include path, remove extension
+        # Parse input: include path and name, remove extension
         filename = os.path.join(path, filename.split('.')[0])
         # Save results
         self.save_grains(filename + '_grains.csv')
         self.save_summary(filename + '_summary.csv')
-        if self.unet_image:
+        if self.unet_image is not None:
             self.save_unet_image(filename + '_unet.jpg')
-        self.save_mask(filename + '_mask.png')
+            # self.save_mask(filename + '_mask.png')
         self.save_grain_image(filename + '_highlighted.png')
         # Close plot
         plt.close(self.plot.fig)
@@ -259,7 +287,8 @@ class RootLayout(BoxLayout):
         self._popup.open()
 
     def show_load_checkpoint(self):
-        dialog = LoadDialog(load=self.load_sam_checkpoint, cancel=self.dismiss_popup)
+        dialog = LoadDialog(
+            load=self.load_sam_checkpoint, cancel=self.dismiss_popup)
         self.show_dialog(dialog, title='Load checkpoint', filters=['*.pth'])
 
     def show_load_data(self):
@@ -270,14 +299,17 @@ class RootLayout(BoxLayout):
     def show_load_image(self):
         plt.close()
         dialog = LoadDialog(load=self.load_image, cancel=self.dismiss_popup)
-        self.show_dialog(dialog, title='Load image', filters=['*.jpg', '*.jpeg', '*.png'])
+        self.show_dialog(
+            dialog, title='Load image', filters=['*.jpg', '*.jpeg', '*.png'])
 
     def show_load_unet(self):
         dialog = LoadDialog(load=self.load_unet, cancel=self.dismiss_popup)
         self.show_dialog(dialog, title='Load Unet model', filters=['*.keras'])
 
     def show_save(self):
-        dialog = SaveDialog(save=self.save, cancel=self.dismiss_popup, path='.', filename=self.image_fn)
+        dialog = SaveDialog(
+            save=self.save, cancel=self.dismiss_popup, 
+            path='.', filename=self.image_fn)
         self.show_dialog(dialog, title='Save results')
 
 
