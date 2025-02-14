@@ -163,8 +163,8 @@ class GrainPlot(object):
             'key_press_event': self.onpress
         }
         self.last_pick = None
-        self.left_cursor = patches.Circle((10, 10), radius=5, color='lime', visible=False)
-        self.right_cursor = patches.Circle((10, 10), radius=5, color='red', visible=False)
+        self.points = []
+        self.point_labels = []
         self.selected_grains = []
         # Plot
         self.fig = plt.figure(figsize=figsize)
@@ -178,33 +178,24 @@ class GrainPlot(object):
         with plt.ioff():
             for grain in grains:
                 grain.make_patch(self.ax)
-            self.ax.add_patch(self.left_cursor)
-            self.ax.add_patch(self.right_cursor)
         # Seems to help with occasional failure to draw updates
         plt.pause(0.1)
 
     # Helper functions ---
-    def set_cursor(self, cursor, xy=False):
-        ''' 
-        Set left or right cursor to given location.
-        
-        Parameters
-        ----------
-        cusor
-            Which cursor to set (self.left_cursor or self.right_cursor).
-        xy
-            Coordinates to display cursor at. Will hide cursor if False.
-        '''
-        if isinstance(xy, tuple):
-            cursor.set_center(xy)
-            cursor.set_visible(True)
-        else:
-            cursor.set_visible(False)
+    def set_point(self, xy:tuple, is_inside:bool=True):
+        ''' Set prompt point '''
+        color = 'lime' if is_inside else 'red'
+        new_point = patches.Circle(xy, radius=5, color=color)
+        self.ax.add_patch(new_point)
+        self.points.append(new_point)
+        self.point_labels.append(is_inside)
 
-    def unset_cursors(self):
-        ''' Hide both left and right cursors. '''
-        self.set_cursor(self.left_cursor, False)
-        self.set_cursor(self.right_cursor, False)
+    def clear_points(self):
+        ''' Clear all prompt points '''
+        for point in self.points:
+            point.remove()
+        self.points = []
+        self.point_labels = []
 
     def unselect_grains(self):
         ''' Unselect all selected grains. '''
@@ -213,35 +204,30 @@ class GrainPlot(object):
         self.selected_grains = []
 
     def unselect_all(self):
-        ''' Hide both cursors and unselect all grains. '''
-        self.unset_cursors()
+        ''' Clear point prompts and unselect all grains. '''
+        self.clear_points()
         self.unselect_grains()
 
     # Manage grains ---
     def create_grain(self):
         ''' Attempt to find and add grain at most recent clicked position. '''
         # Verify that we've actually selected something
-        if not self.left_cursor.get_visible():
+        if not self.points:
             return
         # Attempt to find new grain using given point(s)
-        xy1 = self.left_cursor.get_center()
-        if self.right_cursor.get_visible():
-            # Two-point prompt (grain and background)
-            xy2 = self.right_cursor.get_center()
-            x, y = segmenteverygrain.two_point_prompt(
-                *xy1, *xy2, image=self.image, predictor=self.predictor)
-        else:
-            # One-point prompt (grain only)
-            # TODO: Unsure why this returns a mask but two_point doesn't
-            x, y, mask = segmenteverygrain.one_point_prompt(
-                *xy1, image=self.image, predictor=self.predictor)
+        points = [p.get_center() for p in self.points]
+        coords = segmenteverygrain.predict_from_prompts(
+            predictor=self.predictor,
+            points=points,
+            point_labels=self.point_labels
+        )
         # Record new grain (plot, data, and undo list)
-        grain = Grain((x, y))
+        grain = Grain(coords)
         grain.make_patch(self.ax)
         self.grains.append(grain)
         self.created_grains.append(grain)
-        # Reset cursors
-        self.unset_cursors()
+        # Clear prompts
+        self.clear_points()
 
     def delete_grains(self):
         ''' Delete all selected grains. '''
@@ -252,8 +238,6 @@ class GrainPlot(object):
             if grain in self.created_grains:
                 self.created_grains.remove(grain)
         self.selected_grains = []
-        # Reset cursors
-        self.unset_cursors()
 
     def merge_grains(self):
         ''' Merge all selected grains. '''
@@ -303,11 +287,14 @@ class GrainPlot(object):
             return
         # Left click: set grain prompt
         if event.button == 1:
-            self.set_cursor(self.left_cursor, (event.xdata, event.ydata))
+            self.set_point((event.xdata, event.ydata))
         # Right click: set background prompt
         elif event.button == 3:
-            self.set_cursor(self.right_cursor, (event.xdata, event.ydata))
-        # Draw results to canvas (necessary if plot is shown twice)
+            self.set_point((event.xdata, event.ydata), False)
+        # Neither: don't update the graph
+        else:
+            return
+        # Draw results to canvas (necessary if plot is shown twice, for some reason)
         self.canvas.draw_idle()
 
     def onpick(self, event):
@@ -325,8 +312,8 @@ class GrainPlot(object):
             return
         # Tell onclick to ignore this event
         self.last_pick = mouseevent
-        # Hide cursors
-        self.unset_cursors()
+        # Remove point prompts
+        self.clear_points()
         # Add/remove selected grain to/from selection list
         for grain in self.grains:
             if event.artist is grain.patch:
