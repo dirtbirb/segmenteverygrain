@@ -1,6 +1,7 @@
 import matplotlib as mpl
-import matplotlib.patches as patches
+import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
+import matplotlib.widgets as mwidgets
 import numpy as np
 import pandas as pd
 import rasterio.features
@@ -158,11 +159,11 @@ class GrainPlot(object):
         self.cids = []
         self.created_grains = []
         self.events = {
-            'button_press_event': self.onclick,
-            'pick_event': self.onpick,
-            'key_press_event': self.onpress
+            'button_release_event': self.onrelease,
+            'key_press_event': self.onkey,
+            'pick_event': self.onpick
         }
-        self.last_pick = None
+        self.last_pick = (0, 0)
         self.points = []
         self.point_labels = []
         self.selected_grains = []
@@ -174,20 +175,28 @@ class GrainPlot(object):
             self.ax.imshow(image)
             self.ax.autoscale(enable=False)
         self.fig.tight_layout(pad=0)
+        self.box_selector = mwidgets.RectangleSelector(
+            self.ax,
+            lambda eclick, erelease: None,
+            useblit=True,
+            button=[1],             # Only left-click
+            minspanx=5, minspany=5, # Don't accidentally trigger on click
+            spancoords='pixels'
+        )
         # Draw elements on plot without updating after each one
         with plt.ioff():
             for grain in grains:
                 grain.make_patch(self.ax)
-        # Seems to help with occasional failure to draw updates
+        # HACK: Seems to help with occasional failure to draw updates
         plt.pause(0.1)
 
     # Helper functions ---
     def set_point(self, xy:tuple, is_inside:bool=True):
         ''' Set prompt point '''
         color = 'lime' if is_inside else 'red'
-        new_point = patches.Circle(xy, radius=5, color=color)
+        new_point = mpatches.Circle(xy, radius=5, color=color)
         self.ax.add_patch(new_point)
-        self.points.append(new_point)
+        self.points.append(new_point) 
         self.point_labels.append(is_inside)
 
     def clear_points(self):
@@ -209,17 +218,23 @@ class GrainPlot(object):
         self.unselect_grains()
 
     # Manage grains ---
-    def create_grain(self):
+    def create_grain(self, box=None):
         ''' Attempt to find and add grain at most recent clicked position. '''
         # Verify that we've actually selected something
-        if not self.points:
-            return
-        # Attempt to find new grain using given point(s)
-        points = [p.get_center() for p in self.points]
+        if len(self.points):
+            points = [p.get_center() for p in self.points]
+            point_labels = self.point_labels
+        else:
+            if box is None:
+                return
+            points = None
+            point_labels = None
+        # Attempt to find new grain using given prompts
         coords = segmenteverygrain.predict_from_prompts(
             predictor=self.predictor,
+            box=box,
             points=points,
-            point_labels=self.point_labels
+            point_labels=point_labels
         )
         # Record new grain (plot, data, and undo list)
         grain = Grain(coords)
@@ -270,62 +285,7 @@ class GrainPlot(object):
         self.delete_grains()
 
     # Events ---
-    def onclick(self, event):
-        ''' Handle clicking anywhere on plot.
-        
-        Parameters
-        ----------
-        event
-            Matplotlib mouseevent (different than normal event!)
-        '''
-        # Only individual clicks
-        # Only if not handled by onpick (didn't select a grain)
-        # Only when no grains selected
-        if (event.dblclick is True
-            or event is self.last_pick
-            or len(self.selected_grains) > 0):
-            return
-        # Left click: set grain prompt
-        if event.button == 1:
-            self.set_point((event.xdata, event.ydata))
-        # Right click: set background prompt
-        elif event.button == 3:
-            self.set_point((event.xdata, event.ydata), False)
-        # Neither: don't update the graph
-        else:
-            return
-        # Draw results to canvas (necessary if plot is shown twice, for some reason)
-        self.canvas.draw_idle()
-
-    def onpick(self, event):
-        '''
-        Handle clicking on an existing grain to select/unselect it.
-        
-        Parameters
-        ----------
-        event
-            Matplotlib event
-        '''
-        # Only individual left-clicks
-        mouseevent = event.mouseevent
-        if mouseevent.dblclick or mouseevent.button != 1:
-            return
-        # Tell onclick to ignore this event
-        self.last_pick = mouseevent
-        # Remove point prompts
-        self.clear_points()
-        # Add/remove selected grain to/from selection list
-        for grain in self.grains:
-            if event.artist is grain.patch:
-                if grain.select():
-                    self.selected_grains.append(grain)
-                else:
-                    self.selected_grains.remove(grain)
-                break
-        # Draw results to canvas (necessary if plot is shown twice)
-        self.canvas.draw_idle()
-    
-    def onpress(self, event):
+    def onkey(self, event):
         ''' 
         Handle key presses.
         
@@ -347,6 +307,66 @@ class GrainPlot(object):
         else:
             return
         # Draw results to canvas (necessary if plot is shown twice)
+        self.canvas.draw_idle()
+
+    def onpick(self, event):
+        '''
+        Handle clicking on an existing grain to select/unselect it.
+        
+        Parameters
+        ----------
+        event
+            Matplotlib event
+        '''
+        # Only individual left-clicks, only when no point prompts created
+        mouseevent = event.mouseevent
+        if mouseevent.dblclick or mouseevent.button != 1 or len(self.points) > 0:
+            return
+        # Save mouseevent
+        self.last_pick = (round(mouseevent.xdata), round(mouseevent.ydata))
+        # Add/remove selected grain to/from selection list
+        for grain in self.grains:
+            if event.artist is grain.patch:
+                if grain.select():
+                    self.selected_grains.append(grain)
+                else:
+                    self.selected_grains.remove(grain)
+                break
+        # Draw results to canvas (necessary if plot is shown twice)
+        self.canvas.draw_idle()
+
+    def onrelease(self, event):
+        ''' Handle clicking anywhere on plot.
+        
+        Parameters
+        ----------
+        event
+            Matplotlib mouseevent (different than normal event!)
+        '''
+        # Only individual clicks
+        # Only when this click wasn't trying to pick a grain
+        if (event.dblclick is True
+            or (round(event.xdata), round(event.ydata)) == self.last_pick):
+            return
+        xmin, xmax, ymin, ymax = self.box_selector.extents
+        area = abs((xmax-xmin)*(ymax-ymin))
+        # Box select: trigger grain prediction
+        if event.button == 1 and area > 10:
+            self.unselect_grains()
+            self.create_grain(box=[xmin, ymin, xmax, ymax])
+        # Don't allow making point prompts when grains selected
+        elif len(self.selected_grains) > 0:
+            return
+        # Left click: set grain prompt
+        elif event.button == 1:
+            self.set_point((event.xdata, event.ydata))
+        # Right click: set background prompt
+        elif event.button == 3:
+            self.set_point((event.xdata, event.ydata), False)
+        # Neither: don't update the graph
+        else:
+            return
+        # Draw results to canvas (necessary if plot is shown twice, for some reason)
         self.canvas.draw_idle()
 
     def activate(self):
