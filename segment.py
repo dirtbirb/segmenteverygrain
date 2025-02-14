@@ -1,4 +1,3 @@
-import cv2
 import keras.saving
 import keras.utils
 import matplotlib.pyplot as plt
