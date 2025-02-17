@@ -119,7 +119,7 @@ class Grain(object):
 
     def select(self) -> bool:
         '''
-        Record whether grain is selected/unselected in a plot.
+        Toggle whether grain is selected/unselected in a plot.
         
         Returns
         -------
