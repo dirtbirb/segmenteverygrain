@@ -59,7 +59,7 @@ class Grain(object):
         ''' Return a shapely.Polygon representing the matplot patch. '''
         return shapely.Polygon(self.patch.get_path().vertices)
 
-    def make_data(self, ax) -> pd.Series:
+    def make_data(self, ax:mpl.axes.Axes) -> pd.Series:
         '''
         Calculate grain information from image and matplot patch.
         Overwrites self.data.
@@ -87,7 +87,7 @@ class Grain(object):
         # print('New grain:', self.data)
         return self.data
 
-    def make_patch(self, ax):
+    def make_patch(self, ax:mpl.axes.Axes) -> mpatches.Polygon:
         '''
         Draw this grain on the provided matplotlib axes and save the result.
 
@@ -159,7 +159,7 @@ class GrainPlot(object):
         self.cids = []
         self.created_grains = []
         self.events = {
-            'button_release_event': self.onrelease,
+            'button_release_event': self.onclick,
             'key_press_event': self.onkey,
             'pick_event': self.onpick
         }
@@ -218,7 +218,7 @@ class GrainPlot(object):
         self.unselect_grains()
 
     # Manage grains ---
-    def create_grain(self, box=None):
+    def create_grain(self, box:list=None):
         ''' Attempt to find and add grain at most recent clicked position. '''
         # Verify that we've actually selected something
         if len(self.points):
@@ -285,58 +285,8 @@ class GrainPlot(object):
         self.delete_grains()
 
     # Events ---
-    def onkey(self, event):
-        ''' 
-        Handle key presses.
-        
-        Parameters
-        ----------
-        event
-            Matplotlib event
-        '''
-        if event.key == 'c':
-            self.create_grain()
-        elif event.key == 'd' or event.key == 'delete':
-            self.delete_grains()
-        elif event.key == 'm':
-            self.merge_grains()
-        elif event.key == 'z':
-            self.undo_grain()
-        elif event.key == 'escape':
-            self.unselect_all()
-        else:
-            return
-        # Draw results to canvas (necessary if plot is shown twice)
-        self.canvas.draw_idle()
-
-    def onpick(self, event):
-        '''
-        Handle clicking on an existing grain to select/unselect it.
-        
-        Parameters
-        ----------
-        event
-            Matplotlib event
-        '''
-        # Only individual left-clicks, only when no point prompts created
-        mouseevent = event.mouseevent
-        if mouseevent.dblclick or mouseevent.button != 1 or len(self.points) > 0:
-            return
-        # Save mouseevent
-        self.last_pick = (round(mouseevent.xdata), round(mouseevent.ydata))
-        # Add/remove selected grain to/from selection list
-        for grain in self.grains:
-            if event.artist is grain.patch:
-                if grain.select():
-                    self.selected_grains.append(grain)
-                else:
-                    self.selected_grains.remove(grain)
-                break
-        # Draw results to canvas (necessary if plot is shown twice)
-        self.canvas.draw_idle()
-
-    def onrelease(self, event):
-        ''' Handle clicking anywhere on plot.
+    def onclick(self, event:mpl.backend_bases.MouseEvent):
+        ''' Handle clicking anywhere on plot. Triggers on click release.
         
         Parameters
         ----------
@@ -369,6 +319,56 @@ class GrainPlot(object):
         # Draw results to canvas (necessary if plot is shown twice, for some reason)
         self.canvas.draw_idle()
 
+    def onkey(self, event:mpl.backend_bases.KeyEvent):
+        ''' 
+        Handle key presses.
+        
+        Parameters
+        ----------
+        event
+            Matplotlib KeyEvent
+        '''
+        if event.key == 'c':
+            self.create_grain()
+        elif event.key == 'd' or event.key == 'delete':
+            self.delete_grains()
+        elif event.key == 'm':
+            self.merge_grains()
+        elif event.key == 'z':
+            self.undo_grain()
+        elif event.key == 'escape':
+            self.unselect_all()
+        else:
+            return
+        # Draw results to canvas (necessary if plot is shown twice)
+        self.canvas.draw_idle()
+
+    def onpick(self, event:mpl.backend_bases.PickEvent):
+        '''
+        Handle clicking on an existing grain to select/unselect it.
+        
+        Parameters
+        ----------
+        event
+            Matplotlib event
+        '''
+        # Only individual left-clicks, only when no point prompts created
+        mouseevent = event.mouseevent
+        if mouseevent.dblclick or mouseevent.button != 1 or len(self.points) > 0:
+            return
+        # Save mouseevent
+        self.last_pick = (round(mouseevent.xdata), round(mouseevent.ydata))
+        # Add/remove selected grain to/from selection list
+        for grain in self.grains:
+            if event.artist is grain.patch:
+                if grain.select():
+                    self.selected_grains.append(grain)
+                else:
+                    self.selected_grains.remove(grain)
+                break
+        # Draw results to canvas (necessary if plot is shown twice)
+        self.canvas.draw_idle()
+
     def activate(self):
         ''' Enable interactive features (clicking, etc). '''
         for event, handler in self.events.items():
@@ -381,7 +381,7 @@ class GrainPlot(object):
         self.cids = []
     
     # Output ---
-    def get_mask(self):
+    def get_mask(self) -> list:
         ''' Return labeled image for Unet training. '''
         all_grains = [g.get_polygon() for g in self.grains]
         return segmenteverygrain.create_labeled_image(all_grains, self.image)
