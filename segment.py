@@ -18,8 +18,6 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.popup import Popup
 from kivy_garden.matplotlib.backend_kivyagg import FigureCanvasKivyAgg
 
-from PIL import Image
-Image.MAX_IMAGE_PIXELS = None # needed if working with very large images
 
 # HACK: Turn off crazy debug output
 import logging
@@ -205,20 +203,17 @@ class RootLayout(BoxLayout):
         pd.DataFrame([g.get_polygon() for g in self.plot.grains]).to_csv(filename)
         Logger.info(f'Saved {filename}.')
 
-    # def save_mask(self, filename):
-    #     Logger.info('Saving mask...')
-    #     rasterized_image, self.mask = self.plot.get_mask()
-    #     try:
-    #         print(mask.shape)
-    #         mask = mask
-    #         keras.utils.save_img(filename, mask)
-    #         keras.utils.save_img(filename.split('.')[0] + '_visible.png', mask*127)
-    #     except:
-    #         pass
-    #     cv2.imwrite(filename, mask)
-    #     Logger.info(f'Saved {filename}.')
-    #     cv2.imwrite(filename.split('.')[0] + '_visible.png', mask*127)
-    #     Logger.info(f'Saved {filename}.')
+    def save_mask(self, filename):
+        Logger.info('Saving mask...')
+        # Computer-readable mask (pixel values are 0 or 1)
+        rasterized_image, self.mask = self.plot.get_mask()
+        self.mask = keras.utils.img_to_array(self.mask)
+        keras.utils.save_img(filename, self.mask, scale=False)
+        Logger.info(f'Saved {filename}.')
+        # Human-readable mask (pixel values are 0 or 127)
+        filename = filename.split('.')[0] + '_visible.jpg'
+        keras.utils.save_img(filename, self.mask, scale=True)
+        Logger.info(f'Saved {filename}.')
 
     def save_summary(self, filename):
         Logger.info('Saving summary data...')
@@ -233,14 +228,14 @@ class RootLayout(BoxLayout):
         # Save CSV
         grain_data.to_csv(filename)
         Logger.info(f'Saved {filename}.')
-        # Build and save histogram
-        filename = filename.split('.')[0] + '.jpg'
-        fig, ax = segmenteverygrain.plot_histogram_of_axis_lengths(
-            grain_data['major_axis_length']/1000, 
-            grain_data['minor_axis_length']/1000)
-        fig.savefig(filename, bbox_inches='tight', pad_inches=0)
-        plt.close(fig)
-        Logger.info(f'Saved {filename}.')
+        # # Build and save histogram
+        # filename = filename.split('.')[0] + '.jpg'
+        # fig, ax = segmenteverygrain.plot_histogram_of_axis_lengths(
+        #     grain_data['major_axis_length']/1000, 
+        #     grain_data['minor_axis_length']/1000)
+        # fig.savefig(filename, bbox_inches='tight', pad_inches=0)
+        # plt.close(fig)
+        # Logger.info(f'Saved {filename}.')
 
     def save_unet_image(self, filename):
         # Save unet results for verification (auto segmenting!)
@@ -270,8 +265,8 @@ class RootLayout(BoxLayout):
         self.save_summary(filename + '_summary.csv')
         if self.unet_image is not None:
             self.save_unet_image(filename + '_unet.jpg')
-            # self.save_mask(filename + '_mask.png')
-        self.save_grain_image(filename + '_highlighted.png')
+        self.save_mask(filename + '_mask.png')
+        self.save_grain_image(filename + '_highlighted.jpg')
         # Close plot
         plt.close(self.plot.fig)
         self.dismiss_popup()
