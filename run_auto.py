@@ -17,12 +17,8 @@ image = np.array(keras.utils.load_img(fn))
 
 # Load unet model
 fn = './segmenteverygrain/seg_model.keras'
-unet = keras.saving.load_model(
-    fn, 
-    custom_objects={
-        'weighted_crossentropy': segmenteverygrain.weighted_crossentropy
-    }
-)
+unet = keras.saving.load_model(fn, custom_objects={
+        'weighted_crossentropy': segmenteverygrain.weighted_crossentropy})
 
 # Generate prompts with UNET model
 unet_image = segmenteverygrain.predict_image(image, unet, I=I)
@@ -45,12 +41,12 @@ predictor = segment_anything.SamPredictor(sam)
 predictor.set_image(image)
 
 # Apply SAM for actual segmentation
-# TODO: What is sam_labels?
 grains, sam_labels, mask, summary, fig, ax = segmenteverygrain.sam_segmentation(
     sam, image, unet_image, unet_coords, unet_labels,
-    min_area=MIN_AREA, plot_image=True, remove_edge_grains=True, remove_large_objects=False
-)
-
+    min_area=MIN_AREA,
+    plot_image=True,
+    remove_edge_grains=True,
+    remove_large_objects=False)
 
 
 # Save results
@@ -59,7 +55,6 @@ fn = './output/test'
 # Grain shapes
 print(f'grains: {type(grains)} {grains}')
 pd.DataFrame(grains).to_csv(fn + '_grains.csv')
-
 # Grain image
 fig.savefig(fn + '_grains.jpg', bbox_inches='tight', pad_inches=0)
 
@@ -67,11 +62,10 @@ fig.savefig(fn + '_grains.jpg', bbox_inches='tight', pad_inches=0)
 grain_data = summary
 print(f'grain_data: {type(grain_data)} {grain_data}')
 grain_data.to_csv(fn + '_summary.csv')
-
 # Summary histogram
 fig, ax = segmenteverygrain.plot_histogram_of_axis_lengths(
-    grain_data['major_axis_length']/1000, 
-    grain_data['minor_axis_length']/1000)
+    grain_data['major_axis_length'], 
+    grain_data['minor_axis_length'])
 fig.savefig(fn + '_summary.jpg', bbox_inches='tight', pad_inches=0)
 
 # Training mask
