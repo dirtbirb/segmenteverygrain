@@ -125,7 +125,7 @@ class Grain(object):
         )
         # HACK: Save reference to parent grain within the patch itself
         self.patch.grain = self
-        # Save original color (for select/unselect)
+        # Save assigned color (for select/unselect)
         self.normal_props['facecolor'] = self.patch.get_facecolor()
         # Compute grain data if not provided
         if self.data is None:
