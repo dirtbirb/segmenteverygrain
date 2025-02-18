@@ -181,6 +181,7 @@ class GrainPlot(object):
         self.created_grains = []
         self.events = {
             'button_press_event': self.onclick,
+            'draw_event': self.ondraw,
             'key_press_event': self.onkey,
             'key_release_event': self.onkeyup,
             'pick_event': self.onpick
@@ -359,13 +360,16 @@ class GrainPlot(object):
             Matplotlib mouseevent (different than normal event!)
         '''
         # No double-clicks
-        # No box selecting
+        # Not during toolbar interactions (pan/zoom)
+        # Not during box selection
         # No pick events (no point prompts on existing grains)
-        # No point prompts when grains are selected
+        # Not while grains are selected
         if (event.dblclick
+                or self.canvas.toolbar.mode != ''
                 or self.box_selector.active
                 or self.last_pick == (round(event.xdata), round(event.ydata))
                 or len(self.selected_grains) > 0):
+            return
             return
         # Left click: grain prompt
         if event.button == 1:
@@ -382,6 +386,13 @@ class GrainPlot(object):
         else:
             # Apparently necessary if plot shown twice
             self.canvas.draw_idle()
+
+    def ondraw(self, event:mpl.backend_bases.DrawEvent):
+        ''' Clear selection when zooming to solve problems with blitting. '''
+        if not self.blit:
+            return
+        self.unselect_all()
+        self.background = self.canvas.copy_from_bbox(self.ax.bbox)
 
     def onkey(self, event:mpl.backend_bases.KeyEvent):
         ''' 
@@ -432,8 +443,9 @@ class GrainPlot(object):
             Matplotlib event
         '''
         mouseevent = event.mouseevent
-        # No doubleclicks, no scroll clicks, no box selection
+        # No doubleclicks, no toolbar, no scroll clicks, no box selection
         if (mouseevent.dblclick
+                or self.canvas.toolbar.mode != ''
                 or mouseevent.button == 2
                 or self.box_selector.active):
             return
