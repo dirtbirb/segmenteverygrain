@@ -1,7 +1,6 @@
 # SegmentEveryGrain stuff
-1_input/*
-2_sam_results/*
-3_edited_results/*
+input/
+output/
 
 # PyTorch models
 *.pth
