@@ -15,6 +15,12 @@ FIGSIZE = (12, 8)
 fn = 'torrey_pines_beach_image.jpeg'
 image = np.array(keras.utils.load_img(fn))
 
+# Load SAM
+fn = 'sam_vit_h_4b8939.pth'
+sam = segment_anything.sam_model_registry['default'](checkpoint=fn)
+predictor = segment_anything.SamPredictor(sam)
+predictor.set_image(image)
+
 # Load previous results
 fn = './output/test_grains.csv'
 grains = []
@@ -26,12 +32,6 @@ for grain in pd.read_csv(fn).iterrows():
     grains.append(shapely.Polygon(out_coords))
 grains = [si.Grain(p.exterior.xy) for p in grains]
 
-# Load SAM
-fn = 'sam_vit_h_4b8939.pth'
-sam = segment_anything.sam_model_registry['default'](checkpoint=fn)
-predictor = segment_anything.SamPredictor(sam)
-predictor.set_image(image)
-
 
 # Display editing interface
 plot = si.GrainPlot(
@@ -42,7 +42,6 @@ plot = si.GrainPlot(
     blit=True
 )
 plot.activate()
-# with plt.ion():
 plt.show(block=True)
 plot.deactivate()
 
