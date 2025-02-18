@@ -1,4 +1,5 @@
 import matplotlib as mpl
+import matplotlib.style as mplstyle
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import matplotlib.widgets as mwidgets
@@ -9,6 +10,9 @@ import segmenteverygrain
 import shapely
 import skimage
 
+
+# Speed up rendering a little?
+mplstyle.use('fast')
 
 # Don't reset zoom level when pressing 'c' to create a grain
 if 'c' in mpl.rcParams['keymap.back']:
