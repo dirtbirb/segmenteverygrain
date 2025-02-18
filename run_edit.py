@@ -38,11 +38,12 @@ plot = si.GrainPlot(
     grains, 
     image=image, 
     predictor=predictor,
-    figsize=FIGSIZE
+    figsize=FIGSIZE,
+    blit=True
 )
 plot.activate()
-with plt.ion():
-    plt.show(block=True)
+# with plt.ion():
+plt.show(block=True)
 plot.deactivate()
 
 
