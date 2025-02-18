@@ -86,7 +86,7 @@ class RootLayout(BoxLayout):
 
         # Apply SAM for actual segmentation
         Logger.info('\nSAM segmenting')
-        # TODO: Separate this function into smaller chautunks (plotting, mask, etc)
+        # TODO: Separate this function into smaller chunks (plotting, mask, etc)
         # TODO: Choose min_area by image size? Do unit conversion from pixels first?
         self.grains, sam_labels, mask_all, self.summary, fig, ax = segmenteverygrain.sam_segmentation(
             self.sam, self.image, self.unet_image, self.unet_coords, unet_labels,
@@ -219,23 +219,17 @@ class RootLayout(BoxLayout):
         Logger.info('Saving summary data...')
         # Get measurements from plot as a pd.DataFrame
         grain_data = self.plot.get_data()
-        # Convert units
-        # TODO: Convert from pixels to real units
-        n_of_units = 1000
-        units_per_pixel = n_of_units/1552.77 # length of scale bar in pixels
-        for col in ['major_axis_length', 'minor_axis_length', 'perimeter', 'area']:
-            grain_data[col] *= units_per_pixel
         # Save CSV
         grain_data.to_csv(filename)
         Logger.info(f'Saved {filename}.')
-        # # Build and save histogram
-        # filename = filename.split('.')[0] + '.jpg'
-        # fig, ax = segmenteverygrain.plot_histogram_of_axis_lengths(
-        #     grain_data['major_axis_length']/1000, 
-        #     grain_data['minor_axis_length']/1000)
-        # fig.savefig(filename, bbox_inches='tight', pad_inches=0)
-        # plt.close(fig)
-        # Logger.info(f'Saved {filename}.')
+        # Build and save histogram
+        filename = filename.split('.')[0] + '.jpg'
+        fig, ax = segmenteverygrain.plot_histogram_of_axis_lengths(
+            grain_data['major_axis_length']/1000, 
+            grain_data['minor_axis_length']/1000)
+        fig.savefig(filename, bbox_inches='tight', pad_inches=0)
+        plt.close(fig)
+        Logger.info(f'Saved {filename}.')
 
     def save_unet_image(self, filename):
         # Save unet results for verification (auto segmenting!)
