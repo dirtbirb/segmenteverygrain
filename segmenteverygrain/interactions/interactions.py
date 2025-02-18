@@ -11,11 +11,11 @@ import shapely
 import skimage
 
 
-# HACK: Attach parent grain reference to the Polygon class
-mpatches.Polygon.grain = None
-
 # Speed up rendering a little?
 mplstyle.use('fast')
+
+# HACK: Attach parent grain reference to the Polygon class
+mpatches.Polygon.grain = None
 
 # Don't reset zoom level when pressing 'c' to create a grain
 if 'c' in mpl.rcParams['keymap.back']:
@@ -54,6 +54,7 @@ class Grain(object):
         # Display
         self.normal_props = {
             'alpha': 0.6
+            # facecolor is set when patch is created
         }
         self.selected_props = {
             'alpha': 1.0,
@@ -63,12 +64,12 @@ class Grain(object):
         self.selected = False
 
     def get_polygon(self) -> shapely.Polygon:
-        ''' Return a shapely.Polygon representing the matplot patch. '''
+        ''' Return a shapely.Polygon representing the matplotlib patch. '''
         return shapely.Polygon(self.patch.get_path().vertices)
 
     def make_data(self, ax:mpl.axes.Axes) -> pd.Series:
         '''
-        Calculate grain information from image and matplot patch.
+        Calculate grain information from image and matplotlib patch.
         Overwrites self.data.
 
         Parameters
@@ -96,7 +97,6 @@ class Grain(object):
         else:
             print('MAKE_DATA_ERROR ', pd.DataFrame(data))
             self.data = pd.Series()
-        # print('New grain:', self.data)
         return self.data
 
     def make_patch(self, ax:mpl.axes.Axes) -> mpatches.Polygon:
@@ -362,10 +362,10 @@ class GrainPlot(object):
         # No box selecting
         # No pick events (no point prompts on existing grains)
         # No point prompts when grains are selected
-        if (event.dblclick or
-                self.box_selector.active or
-                self.last_pick == (round(event.xdata), round(event.ydata)) or
-                len(self.selected_grains) > 0):
+        if (event.dblclick
+                or self.box_selector.active
+                or self.last_pick == (round(event.xdata), round(event.ydata))
+                or len(self.selected_grains) > 0):
             return
         # Left click: grain prompt
         if event.button == 1:
@@ -433,9 +433,9 @@ class GrainPlot(object):
         '''
         mouseevent = event.mouseevent
         # No doubleclicks, no scroll clicks, no box selection
-        if (mouseevent.dblclick or
-                mouseevent.button == 2 or
-                self.box_selector.active):
+        if (mouseevent.dblclick
+                or mouseevent.button == 2
+                or self.box_selector.active):
             return
         # Block any point prompts that would be on a grain
         self.last_pick = (round(mouseevent.xdata), round(mouseevent.ydata))
