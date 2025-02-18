@@ -83,7 +83,12 @@ class Grain(object):
         # TODO: Avoid going list -> DataFrame -> Series
         data = skimage.measure.regionprops_table(
             label, intensity_image=image, properties=self.region_props)
-        self.data = pd.DataFrame(data).iloc[0]
+        data = pd.DataFrame(data)
+        if len(data):
+            self.data = data.iloc[0]
+        else:
+            print('MAKE_DATA_ERROR ', pd.DataFrame(data))
+            self.data = pd.Series()
         # print('New grain:', self.data)
         return self.data
 
@@ -108,6 +113,7 @@ class Grain(object):
             edgecolor='black',
             linewidth=2.0,
             picker=True,
+            animated=True,
             **self.normal_props
         )
         # Save original color (for select/unselect)
@@ -127,8 +133,9 @@ class Grain(object):
             True if this grain is now selected.
         '''
         self.selected = not self.selected
-        props = self.selected_props if self.selected else self.normal_props
-        self.patch.set(**props)
+        self.patch.update(
+            self.selected_props if self.selected else self.normal_props
+        )
         # if self.selected:
         #     print(self.data)
         return self.selected
