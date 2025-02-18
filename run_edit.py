@@ -21,7 +21,7 @@ sam = segment_anything.sam_model_registry['default'](checkpoint=fn)
 predictor = segment_anything.SamPredictor(sam)
 predictor.set_image(image)
 
-# Load previous results
+# Load grains
 fn = './output/test_grains.csv'
 grains = []
 for grain in pd.read_csv(fn).iterrows():
