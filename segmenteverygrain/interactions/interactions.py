@@ -14,7 +14,7 @@ import skimage
 # Speed up rendering a little?
 mplstyle.use('fast')
 
-# HACK: Attach parent grain reference to the Polygon class
+# Attach parent grain reference to the Polygon class
 mpatches.Polygon.grain = None
 
 # Don't reset zoom level when pressing 'c' to create a grain
@@ -198,11 +198,20 @@ class GrainPlot(object):
             self.ax.imshow(image)
             self.ax.autoscale(enable=False)
         self.fig.tight_layout(pad=0)
+        # Fix toolbar by unselecting all grains/points before rendering new view
+        toolbar = self.canvas.toolbar
+        toolbar.push_current = self.unselect_before(toolbar.push_current)
+        toolbar._update_view = self.unselect_before(toolbar._update_view)
+        # Draw grains and initialize plot
+        for grain in grains:
+            grain.make_patch(self.ax)
+        if blit:
+            self.canvas.draw()
+            # self.background = self.canvas.copy_from_bbox(self.ax.bbox)
         # Box selector
         self.box = np.zeros(4, dtype=int)
         self.box_selector = mwidgets.RectangleSelector(
-            self.ax,
-            onselect=lambda a, b: None, # Shouldn't be required, but it is
+            self.ax, None,
             minspanx=minspan,           # Don't accidentally trigger on click
             minspany=minspan,   
             useblit=True,               # Always try to use blitting
@@ -213,14 +222,21 @@ class GrainPlot(object):
                 'fill': True},
             spancoords='pixels',
             button=[1],                 # Left mouse button only
-            interactive=True)
+            interactive=True,
+            state_modifier_keys={}
+            )
         self.box_selector.set_active(False)
-        # Draw grains and initialize plot
-        for grain in grains:
-            grain.make_patch(self.ax)
-        if blit:
-            self.canvas.draw()
-            self.background = self.canvas.copy_from_bbox(self.ax.bbox)
+        # self.box_selector.update_background(None)
+        # self.box_selector.background = self.background
+
+    # Fix artifacts after zooming
+    def unselect_before(self, f):
+        def newf(*args, **kwargs):
+            if self.blit:
+                self.unselect_all()
+            ret = f(*args, **kwargs)
+            return ret
+        return newf
 
     # Fast display method ---
     def do_blit(self):
@@ -262,9 +278,9 @@ class GrainPlot(object):
 
     def unselect_all(self):
         ''' Clear point prompts and unselect all grains. '''
-        self.box_selector.set_active(False)
-        self.box_selector.set_visible(False)
         self.clear_points()
+        # self.box_selector.set_active(False)
+        # self.box_selector.set_visible(False)
         self.unselect_grains()
 
     # Manage grains ---
@@ -282,7 +298,7 @@ class GrainPlot(object):
             xmin, xmax, ymin, ymax = self.box_selector.extents
             box = [xmin, ymin, xmax, ymax]
         else:
-            # Return if we haven't selected anything
+            # Return if we haven't provided any prompts
             if points is None:
                 return
             box = None
@@ -300,24 +316,25 @@ class GrainPlot(object):
         self.created_grains.append(grain)
         # Clear prompts
         self.unselect_all()
+        # Update background
         if self.blit:
-            # Update background
             self.canvas.draw()
-            self.background = self.canvas.copy_from_bbox(self.ax.bbox)
 
     def delete_grains(self):
         ''' Delete all selected grains. '''
+        # Verify that at least one grain is selected
+        if len(self.selected_grains) < 1:
+            return
+        # Remove selected grains from plot, data, and undo list
         for grain in self.selected_grains:
-            # Remove grain from plot, data, and undo list
             grain.patch.remove()
             self.grains.remove(grain)
             if grain in self.created_grains:
                 self.created_grains.remove(grain)
         self.selected_grains = []
+        # Update background
         if self.blit:
-            # Update background
             self.canvas.draw()
-            self.background = self.canvas.copy_from_bbox(self.ax.bbox)
 
     def merge_grains(self):
         ''' Merge all selected grains. '''
@@ -351,6 +368,9 @@ class GrainPlot(object):
         self.delete_grains()
 
     # Events ---
+    def onbox(self, click_event, release_event):
+        pass
+    
     def onclick(self, event:mpl.backend_bases.MouseEvent):
         ''' Handle clicking anywhere on plot. Triggers on click release.
         
@@ -370,7 +390,6 @@ class GrainPlot(object):
                 or self.last_pick == (round(event.xdata), round(event.ydata))
                 or len(self.selected_grains) > 0):
             return
-            return
         # Left click: grain prompt
         if event.button == 1:
             self.set_point((event.xdata, event.ydata), True)
@@ -388,11 +407,9 @@ class GrainPlot(object):
             self.canvas.draw_idle()
 
     def ondraw(self, event:mpl.backend_bases.DrawEvent):
-        ''' Clear selection when zooming to solve problems with blitting. '''
-        if not self.blit:
-            return
-        self.unselect_all()
-        self.background = self.canvas.copy_from_bbox(self.ax.bbox)
+        ''' Save new background for blitting. '''
+        if self.blit:
+            self.background = self.canvas.copy_from_bbox(self.ax.bbox)
 
     def onkey(self, event:mpl.backend_bases.KeyEvent):
         ''' 
@@ -415,7 +432,8 @@ class GrainPlot(object):
         elif event.key == 'escape':
             self.unselect_all()
         elif event.key == 'shift':
-            self.box_selector.set_active(True)
+            # self.box_selector.set_active(True)
+            pass
         else:
             return
         # Update canvas
@@ -447,7 +465,7 @@ class GrainPlot(object):
         if (mouseevent.dblclick
                 or self.canvas.toolbar.mode != ''
                 or mouseevent.button == 2
-                or self.box_selector.active):
+                or self.box_selector.get_active()):
             return
         # Block any point prompts that would be on a grain
         self.last_pick = (round(mouseevent.xdata), round(mouseevent.ydata))
