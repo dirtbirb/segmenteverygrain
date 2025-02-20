@@ -264,7 +264,7 @@ class GrainPlot(object):
         box = self.box_selector
         alpha = 0.4 if activate else 0.2
         box.set_props(alpha=alpha)
-        box.set_handle_props(alpha=alpha)
+        box.set_handle_props(alpha=alpha, visible=activate)
         box.set_active(activate)
     
     def set_point(self, xy:tuple, is_inside:bool=True):
