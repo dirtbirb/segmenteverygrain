@@ -456,6 +456,7 @@ class GrainPlot(object):
         elif event.key == 'escape':
             self.unselect_all()
         elif event.key == 'shift':
+            self.unselect_grains()
             self.box_selector.set_active(True)
         else:
             return
