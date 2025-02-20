@@ -260,6 +260,13 @@ class GrainPlot(object):
         self.canvas.blit(self.ax.bbox)
 
     # Selection helpers ---
+    def activate_box(self, activate=True):
+        box = self.box_selector
+        alpha = 0.4 if activate else 0.2
+        box.set_props(alpha=alpha)
+        box.set_handle_props(alpha=alpha)
+        box.set_active(activate)
+    
     def set_point(self, xy:tuple, is_inside:bool=True):
         ''' Set point prompt. '''
         color = 'lime' if is_inside else 'red'
@@ -435,7 +442,7 @@ class GrainPlot(object):
             self.unselect_all()
         elif event.key == 'shift':
             self.unselect_grains()
-            self.box_selector.set_active(True)
+            self.activate_box()
         else:
             return
         # Update canvas
@@ -448,7 +455,7 @@ class GrainPlot(object):
     def onkeyup(self, event:mpl.backend_bases.KeyEvent):
         # Cancel box selector if too small
         if event.key == 'shift':
-            self.box_selector.set_active(False)
+            self.activate_box(False)
             xmin, xmax, ymin, ymax = self.box_selector.extents
             area = abs(xmax-xmin) * abs(ymax-ymin)
             if area < self.minspan ** 2:
