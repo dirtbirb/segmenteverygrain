@@ -226,9 +226,8 @@ class GrainPlot(object):
             state_modifier_keys={}
             )
         self.box_selector.set_active(False)
-        # Replace RectangleSelector.update with combined blit method
+        # Take over RectangleSelector update methods, avoid redundant blitting
         self.box_selector.update = self.update
-        # Disable RectangleSelector.update_background; handled by self.ondraw
         self.box_selector.update_background = lambda *args: None
         
         # Draw grains and initialize plot
@@ -418,7 +417,6 @@ class GrainPlot(object):
         ''' Update saved background whenever a full redraw is triggered. '''
         if self.blit:
             self.background = self.canvas.copy_from_bbox(self.ax.bbox)
-            self.box_selector.background = self.background
 
     def onkey(self, event:mpl.backend_bases.KeyEvent):
         ''' 
