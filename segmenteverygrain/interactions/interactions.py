@@ -176,6 +176,7 @@ class GrainPlot(object):
         self.predictor = predictor
         self.blit = blit
         self.minspan = minspan
+        
         # Interactions
         self.cids = []
         self.created_grains = []
@@ -190,6 +191,7 @@ class GrainPlot(object):
         self.points = []
         self.point_labels = []
         self.selected_grains = []
+        
         # Plot
         self.fig = plt.figure(figsize=figsize)
         self.canvas = self.fig.canvas
@@ -198,11 +200,13 @@ class GrainPlot(object):
             self.ax.imshow(image)
             self.ax.autoscale(enable=False)
         self.fig.tight_layout(pad=0)
+        
         # Interactive toolbar: inject unselect_all before any zoom/pan changes
         toolbar = self.canvas.toolbar
         toolbar._update_view = self.unselect_before(toolbar._update_view)
         toolbar.release_pan = self.unselect_before(toolbar.release_pan)
         toolbar.release_zoom = self.unselect_before(toolbar.release_zoom)
+        
         # Box selector
         self.box = np.zeros(4, dtype=int)
         self.box_selector = mwidgets.RectangleSelector(
@@ -222,10 +226,11 @@ class GrainPlot(object):
             state_modifier_keys={}
             )
         self.box_selector.set_active(False)
-        # Replace RectangleSelector.update with modified version
-        self.box_selector.update = self.update_box
-        # Bypass RectangleSelector.update_background; handled by self.ondraw
+        # Replace RectangleSelector.update with combined blit method
+        self.box_selector.update = self.update
+        # Disable RectangleSelector.update_background; handled by self.ondraw
         self.box_selector.update_background = lambda *args: None
+        
         # Draw grains and initialize plot
         for grain in grains:
             grain.make_patch(self.ax)
@@ -233,31 +238,6 @@ class GrainPlot(object):
             self.canvas.draw()
 
     # Display helpers ---
-    def update_box(self):
-        ''' 
-        Modified version of RectangleSelector update method.
-        Exludes unselected grains; they get drawn twice without this.
-        '''
-        box_selector = self.box_selector
-        if not box_selector.ax.get_visible():
-            return
-        if box_selector.useblit:
-            if box_selector.background is not None:
-                box_selector.canvas.restore_region(box_selector.background)
-            else:
-                box_selector.update_background(None)
-            artists = sorted(
-                box_selector.artists
-                # + box_selector._get_animated_artists(),
-                + tuple(self.points)
-                + tuple(g.patch for g in self.selected_grains),
-                key=lambda a: a.get_zorder())
-            for artist in artists:
-                box_selector.ax.draw_artist(artist)
-            box_selector.canvas.blit(box_selector.ax.bbox)
-        else:
-            box_selector.canvas.draw_idle()
-
     def unselect_before(self, f):
         ''' Wrap a function to call unselect_all before it. '''
         def newf(*args, **kwargs):
@@ -266,19 +246,18 @@ class GrainPlot(object):
             return f(*args, **kwargs)
         return newf
 
-    def do_blit(self):
+    def update(self):
         ''' Blit background image and draw animated art'''
         # Reset background
         self.canvas.restore_region(self.background)
-        # Draw highlighted grains
-        for grain in self.selected_grains:
-            self.ax.draw_artist(grain.patch)
-        # Draw point prompts
-        for point in self.points:
-            self.ax.draw_artist(point)
+        # Draw animated artists
+        artists = (tuple(g.patch for g in self.selected_grains)
+            + tuple(self.points)
+            + self.box_selector.artists)
+        for a in artists:
+            self.ax.draw_artist(a)
         # Push to canvas
         self.canvas.blit(self.ax.bbox)
-        self.canvas.flush_events()
 
     # Selection helpers ---
     def set_point(self, xy:tuple, is_inside:bool=True):
@@ -354,10 +333,9 @@ class GrainPlot(object):
         # Remove selected grains from plot, data, and undo list
         for grain in self.selected_grains:
             grain.patch.remove()
-            self.grains.remove(grain)
             if grain in self.created_grains:
                 self.created_grains.remove(grain)
-        self.selected_grains = []
+        self.unselect_all()
         # Update background
         if self.blit:
             self.canvas.draw()
@@ -424,7 +402,7 @@ class GrainPlot(object):
             return
         # Update canvas
         if self.blit:
-            self.do_blit()
+            self.update()
         else:
             # Apparently necessary if plot shown twice
             self.canvas.draw_idle()
@@ -462,7 +440,7 @@ class GrainPlot(object):
             return
         # Update canvas
         if self.blit:
-            self.do_blit()
+            self.update()
         else:
             # Apparently necessary if plot shown twice
             self.canvas.draw_idle()
@@ -505,7 +483,7 @@ class GrainPlot(object):
             self.selected_grains.remove(grain)
         # Update canvas
         if self.blit:
-            self.do_blit()
+            self.update()
         else:
             # Apparently necessary if plot shown twice
             self.canvas.draw_idle()
