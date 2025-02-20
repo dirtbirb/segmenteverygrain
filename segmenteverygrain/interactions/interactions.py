@@ -233,9 +233,6 @@ class GrainPlot(object):
             self.canvas.draw()
 
     # Display helpers ---
-    def _get_animated_artists(self):
-        return tuple(self.points + self.selected_grains)
-
     def update_box(self):
         ''' 
         Modified version of RectangleSelector update method.
