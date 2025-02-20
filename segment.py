@@ -58,7 +58,6 @@ class RootLayout(BoxLayout):
     sam = ObjectProperty()
     sam_checkpoint_fn = StringProperty()
     summary = ObjectProperty(allownone=True)
-    summary_fn = StringProperty()
     unet_image = ObjectProperty()
     unet_model = ObjectProperty()
     unet_fn = StringProperty()
@@ -69,13 +68,12 @@ class RootLayout(BoxLayout):
         self.load_unet('', './segmenteverygrain/seg_model.keras')
         self.update_data_labels()
 
-    def update_data_labels(self, text='-'):
+    def update_data_labels(self, text='Load'):
         self.grains_fn = text
-        self.summary_fn = text
 
     # Segmentation -----------------------------------------------------------
     def auto_segment(self):
-        Logger.info('\n--- Auto-segmenting ---')
+        Logger.info('--- Auto-segmenting ---')
 
         # Generate prompts with UNET model
         Logger.info('\nUNET prediction')
@@ -99,7 +97,7 @@ class RootLayout(BoxLayout):
         self.show_save()
 
     def manual_segment(self):
-        Logger.info('\n--- Manual editing ---')
+        Logger.info('--- Manual editing ---')
         plt.close('all')
 
         # Prepare SAM predictor
@@ -117,8 +115,7 @@ class RootLayout(BoxLayout):
             figsize=FIGSIZE
         )
         self.plot.activate()
-        with plt.ion():
-            plt.show(block=True)
+        plt.show(block=True)
         self.plot.deactivate()
 
         # Update GUI and show save dialog
@@ -126,14 +123,7 @@ class RootLayout(BoxLayout):
         self.show_save()
 
     # Save/load --------------------------------------------------------------
-    def load_data(self, path, filename):
-        # Load grain data
-        self.load_grain_data(path, filename)
-        # Trigger "load summary" dialog immediately afterward
-        dialog = LoadDialog(load=self.load_summary_data, cancel=self.dismiss_popup)
-        self.show_dialog(dialog, title='Load summary data', filters=['*.csv'])
-
-    def load_grain_data(self, path, filename):
+    def load_grains(self, path, filename):
         # Load grain data csv
         Logger.info('Loading grains...')
         # HACK: Parse accidental string output
@@ -144,6 +134,7 @@ class RootLayout(BoxLayout):
                 x, y = coord.split(' ')
                 out_coords.append((float(x), float(y)))
             grains.append(shapely.Polygon(out_coords))
+        grains = [si.Grain(p.exterior.xy) for p in grains]
         self.grains = grains
         self.grains_fn = os.path.basename(filename)
         self.dismiss_popup()
@@ -170,16 +161,6 @@ class RootLayout(BoxLayout):
         self.predictor = segment_anything.SamPredictor(self.sam)
         self.dismiss_popup()
         Logger.info(f'Loaded checkpoint {self.sam_checkpoint_fn}.')
-
-    def load_summary_data(self, path, filename):
-        ''' Triggered after loading grains '''
-        # TODO: rebuild data, don't require loading it in?
-        Logger.info('Loading data...')
-        self.summary = pd.read_csv(filename).drop('Unnamed: 0', axis=1)
-        self.summary_fn = os.path.basename(filename)
-        self.grains = [si.Grain(p.exterior.xy, row[1]) for p, row in zip(self.grains, self.summary.iterrows())]
-        self.dismiss_popup()
-        Logger.info(f'Loaded {self.summary_fn}.')  
 
     def load_unet(self, path, filename):
         Logger.info('Loading unet model...')
@@ -281,9 +262,8 @@ class RootLayout(BoxLayout):
             load=self.load_sam_checkpoint, cancel=self.dismiss_popup)
         self.show_dialog(dialog, title='Load checkpoint', filters=['*.pth'])
 
-    def show_load_data(self):
-        # Triggers both "load grains" and "load summary" in sequence
-        dialog = LoadDialog(load=self.load_data, cancel=self.dismiss_popup)
+    def show_load_grains(self):
+        dialog = LoadDialog(load=self.load_grains, cancel=self.dismiss_popup)
         self.show_dialog(dialog, title='Load grain data', filters=['*.csv'])
 
     def show_load_image(self):

@@ -70,12 +70,12 @@
             text: root.image_fn or 'Load'
             on_release: root.show_load_image()
     Row:
-        size_hint_y: 2
+        size_hint_y: 1
         Label:
-            text: 'Data'
+            text: 'Grains'
         Button:
-            text: f'Grains: {root.grains_fn}\nData: {root.summary_fn}' if root.grains_fn else ''
-            on_release: root.show_load_data()
+            text: root.grains_fn or 'Load'
+            on_release: root.show_load_grains()
     Image:
         size_hint_y: 10
         id: image
@@ -84,7 +84,6 @@
         disabled: root.unet_model is None or type(root.image) is type(None)
         Button:
             text: 'Autosegment'
-            background_color: (1, 0, 0, 1)
             on_release: root.auto_segment()
         Button:
             text: 'Interactive'
