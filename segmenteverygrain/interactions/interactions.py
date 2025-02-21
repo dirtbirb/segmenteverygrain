@@ -286,17 +286,21 @@ class GrainPlot(object):
         # Update offset based on position
         ext = grain.patch.get_extents()
         img_x, img_y = self.canvas.get_width_height()
-        x = 0 if (ext.x1 + ext.x0) / img_x > 1 else 1
-        y = 0 if (ext.y1 + ext.y0) / img_y > 1 else 1
+        x = -0.1 if (ext.x1 + ext.x0) / img_x > 1 else 1.1
+        y = -0.1 if (ext.y1 + ext.y0) / img_y > 1 else 1.1
         # Scoot annotation a little more for small grains
         if abs(ext.y1 - ext.y0) < img_y / 20:
-            y = -1 if y == 0 else 2
+            if y <= 0:
+                y -= 1.4 
+            else:
+                y += 1.4
         self.info.xy = (x, y)
         # Update position
         self.info.xycoords = grain.patch
         # Update text
         text = (f"Major: {grain.data['major_axis_length']:.0f}px\n"
-                f"Minor: {grain.data['minor_axis_length']:.0f}px")
+                f"Minor: {grain.data['minor_axis_length']:.0f}px\n"
+                f"Area: {grain.data['area']:.0f}px")
         self.info.set_text(text)
         # Show info box if requested
         if self.show_info:
