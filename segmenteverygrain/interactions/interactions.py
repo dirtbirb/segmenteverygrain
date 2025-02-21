@@ -227,8 +227,9 @@ class GrainPlot(object):
             )
         self.box_selector.set_active(False)
         # Replace RectangleSelector update methods to avoid redundant blitting
-        self.box_selector.update = self.update
-        self.box_selector.update_background = lambda *args: None
+        if blit:
+            self.box_selector.update = self.update
+            self.box_selector.update_background = lambda *args: None
         
         # Info box
         self.info = self.ax.annotate('',
@@ -238,7 +239,7 @@ class GrainPlot(object):
             ha='center',
             va='center',
             bbox={'boxstyle': 'round', 'fc':'w'}, 
-            animated=True)
+            animated=blit)
         self.show_info = True
 
         # Draw grains and initialize plot
