@@ -226,10 +226,21 @@ class GrainPlot(object):
             state_modifier_keys={}
             )
         self.box_selector.set_active(False)
-        # Take over RectangleSelector update methods, avoid redundant blitting
+        # Replace RectangleSelector update methods to avoid redundant blitting
         self.box_selector.update = self.update
         self.box_selector.update_background = lambda *args: None
         
+        # Info box
+        self.info = self.ax.annotate('',
+            xy=(0, 0),
+            xytext=(0, 0),
+            textcoords='offset points',
+            ha='center',
+            va='center',
+            bbox={'boxstyle': 'round', 'fc':'w'}, 
+            animated=True)
+        self.show_info = True
+
         # Draw grains and initialize plot
         for grain in grains:
             grain.make_patch(self.ax)
@@ -252,11 +263,43 @@ class GrainPlot(object):
         # Draw animated artists
         artists = (tuple(g.patch for g in self.selected_grains)
             + tuple(self.points)
-            + self.box_selector.artists)
+            + self.box_selector.artists
+            + (self.info,))
         for a in artists:
             self.ax.draw_artist(a)
         # Push to canvas
         self.canvas.blit(self.ax.bbox)
+
+    def toggle_info(self):
+        # Toggle info box flag
+        self.show_info = not self.show_info
+        # Show info box if requested and grains selected
+        self.info.set_visible(self.show_info and len(self.selected_grains))
+
+    def update_info(self):
+        # Update based on last selected grain, or hide if none selected
+        if not len(self.selected_grains):
+            self.info.set_visible(False)
+            return
+        grain = self.selected_grains[-1]
+        # Update offset based on position
+        ext = grain.patch.get_extents()
+        img_x, img_y = self.canvas.get_width_height()
+        x = 0 if (ext.x1 + ext.x0) / img_x > 1 else 1
+        y = 0 if (ext.y1 + ext.y0) / img_y > 1 else 1
+        # Scoot annotation a little more for small grains
+        if abs(ext.y1 - ext.y0) < img_y / 20:
+            y = -1 if y == 0 else 2
+        self.info.xy = (x, y)
+        # Update position
+        self.info.xycoords = grain.patch
+        # Update text
+        text = (f"Major: {grain.data['major_axis_length']:.0f}px\n"
+                f"Minor: {grain.data['minor_axis_length']:.0f}px")
+        self.info.set_text(text)
+        # Show info box if requested
+        if self.show_info:
+            self.info.set_visible(True)
 
     # Selection helpers ---
     def activate_box(self, activate=True):
@@ -386,12 +429,14 @@ class GrainPlot(object):
         event
             Matplotlib mouseevent (different than normal event!)
         '''
+        # Must be in axis
         # No double-clicks
         # Not during box selection (shift is pressed)
         # Not during toolbar interactions (pan/zoom)
         # Not while grains are selected
         # Not a pick event (don't put point prompts on existing grains)
-        if (event.dblclick
+        if (False    
+                or event.dblclick
                 or self.box_selector.get_active()
                 or self.canvas.toolbar.mode != ''
                 or len(self.selected_grains) > 0
@@ -432,6 +477,8 @@ class GrainPlot(object):
             self.create_grain()
         elif event.key == 'd' or event.key == 'delete':
             self.delete_grains()
+        elif event.key == 'i':
+            self.toggle_info()
         elif event.key == 'm':
             self.merge_grains()
         elif event.key == 'z':
@@ -486,6 +533,8 @@ class GrainPlot(object):
             self.selected_grains.append(grain)
         else:
             self.selected_grains.remove(grain)
+        # Update info box
+        self.update_info()
         # Update canvas
         if self.blit:
             self.update()
