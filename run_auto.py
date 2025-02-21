@@ -18,7 +18,7 @@ image = np.array(keras.utils.load_img(fn))
 # Load unet model
 fn = './segmenteverygrain/seg_model.keras'
 unet = keras.saving.load_model(fn, custom_objects={
-        'weighted_crossentropy': segmenteverygrain.weighted_crossentropy})
+    'weighted_crossentropy': segmenteverygrain.weighted_crossentropy})
 
 # Generate prompts with UNET model
 unet_image = segmenteverygrain.predict_image(image, unet, I=I)
