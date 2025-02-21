@@ -4,6 +4,7 @@
 
 [![Tests](https://github.com/zsylvester/segmenteverygrain/actions/workflows/ci.yaml/badge.svg)](https://github.com/zsylvester/segmenteverygrain/actions/workflows/ci.yaml)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![status](https://joss.theoj.org/papers/3adb1bac50434eb701915a59d65eba40/status.svg)](https://joss.theoj.org/papers/3adb1bac50434eb701915a59d65eba40)
 
 
 ## Description
@@ -37,10 +38,48 @@ More documentation is available at [https://zsylvester.github.io/segmenteverygra
 
 ## Installation
 
-'segmenteverygrain' is available through pypi.org, so you can install it by running
-<code>pip install segmenteverygrain</code>
+'segmenteverygrain' is available through pypi.org, so you can install it by running:
+```
+pip install segmenteverygrain
+```
 
 The easiest way of creating a Python environment in which 'segmenteverygrain' works well is to use the ['environment.yml'](https://github.com/zsylvester/segmenteverygrain/blob/main/environment.yml) file with conda (or mamba).
+
+If you are starting from scratch (no software on your computer for Python package management and no git installed), here are some more detailed instructions to follow:
+
+First, download Anaconda at [https:www.anaconda.com/download](https:www.anaconda.com/download). \[This will install the Anaconda Distribution. Alternatively, if you are comfortable with the command line, you can [rely only on conda or mamba](https://docs.conda.io/projects/conda/en/stable/user-guide/install/index.html). Currently [miniforge](https://conda-forge.org/download) might be the best option as it allows you to rely on the `mamba` package solver, which is faster than `conda`.\]
+
+In Anaconda Prompt (Windows), or Terminal (Mac), enter the following to install pip and git packages:
+
+```
+conda install pip git
+```
+
+Download the segmenteverygrain files.
+
+Windows:
+```
+git clone --depth 1 https://github.com/zsylvester/segmenteverygrain.git
+```
+Linux/Mac:
+```
+git clone --depth 1 git@github.com:zsylvester/segmenteverygrain.git
+```
+
+Set up the `segmenteverygrain` environment with conda (Windows):
+```
+conda env create -f segmenteverygrain/environment.yml
+```
+
+Set up the `segmenteverygrain` environment with conda (Mac):
+```
+conda env create -f segmenteverygrain/environment_macos.yml
+```
+
+Activate environment:
+```
+conda activate segmenteverygrain
+```
 
 ## Getting started
 
@@ -50,7 +89,7 @@ See the [Segment_every_grain.ipynb](https://github.com/zsylvester/segmenteverygr
 
 <img src="https://github.com/zsylvester/segmenteverygrain/blob/main/miocene_sst_large_2.jpeg" width="600">
 
-The [Train_seg_unet_model.ipynb](https://github.com/zsylvester/segmenteverygrain/blob/main/segmenteverygrain/Train_seg_unet_model.ipynb) notebook goes through the steps needed to create, train, and test the Unet model. If the base Unet model does not work well on a specific type of image, it is a good idea to generate some new training data (a few small images are usually enough) and to fine tune the base model so that it works better on the new image type. The workflow in the 'Train_seg_unet_model' notebook can be used to do this finetuning -- you just need to load the weights of the base model before starting the training.
+ If the base Unet model does not work well on a specific type of image, it is a good idea to generate some new training data (a few small images are usually enough) and to fine tune the base model so that it works better on the new image type. This can be done by running the cells in the last section ('Finetuning the base model') of the [Segment_every_grain.ipynb](https://github.com/zsylvester/segmenteverygrain/blob/main/segmenteverygrain/Segment_every_grain.ipynb) notebook.
 
 The [Segment_every_grain_colab.ipynb](https://github.com/zsylvester/segmenteverygrain/blob/main/segmenteverygrain/Segment_every_grain_colab.ipynb) has been adjusted so that the segmentation can be tested in Google Colab. That said, the interactivity in Colab is not as smooth as in a local notebook.
 
@@ -60,4 +99,4 @@ Thanks to Danny Stockli, Nick Howes, Kalinda Roberts, Jake Covault, Matt Malkows
 
 ## License
 
-segmenteverygrain is licensed under the [Apache License 2.0](https://github.com/zsylvester/segmenteverygrain/blob/master/LICENSE.txt).
+`segmenteverygrain` is licensed under the [Apache License 2.0](https://github.com/zsylvester/segmenteverygrain/blob/master/LICENSE.txt).

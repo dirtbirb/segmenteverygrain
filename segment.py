@@ -60,7 +60,6 @@ class RootLayout(BoxLayout):
     sam = ObjectProperty()
     sam_checkpoint_fn = StringProperty()
     summary = ObjectProperty(allownone=True)
-    summary_fn = StringProperty()
     unet_image = ObjectProperty()
     unet_model = ObjectProperty()
     unet_fn = StringProperty()
@@ -71,47 +70,49 @@ class RootLayout(BoxLayout):
         self.load_unet('', './segmenteverygrain/seg_model.keras')
         self.update_data_labels()
 
-    def update_data_labels(self, text='-'):
+    def update_data_labels(self, text='Load'):
         self.grains_fn = text
-        self.summary_fn = text
 
     # Segmentation -----------------------------------------------------------
     def auto_segment(self):
-        Logger.info('\n--- Auto-segmenting ---')
+        Logger.info('--- Auto-segmenting ---')
 
         # Generate prompts with UNET model
-        Logger.info('\nUNET prediction')
+        Logger.info('UNET prediction')
         self.unet_image = segmenteverygrain.predict_image(
             self.image, self.unet_model, I=256)
         unet_labels, self.unet_coords = segmenteverygrain.label_grains(
             self.image, self.unet_image, dbs_max_dist=20.0)
 
         # Apply SAM for actual segmentation
-        Logger.info('\nSAM segmenting')
-        # TODO: Separate this function into smaller chautunks (plotting, mask, etc)
+        Logger.info('SAM segmenting')
+        # TODO: Separate this function into smaller chunks (plotting, mask, etc)
         # TODO: Choose min_area by image size? Do unit conversion from pixels first?
         self.grains, sam_labels, mask_all, self.summary, fig, ax = segmenteverygrain.sam_segmentation(
             self.sam, self.image, self.unet_image, self.unet_coords, unet_labels,
             min_area=MIN_AREA, plot_image=False, remove_edge_grains=False, remove_large_objects=False)
-        plt.close(fig)
+        # plt.close(fig)
+
+        # Process results
+        pass
 
         # Update GUI and show save dialog
-        Logger.info('\nAuto-segmenting complete!\n')
+        Logger.info('Auto-segmenting complete!')
         self.update_data_labels('Calculated!')
         self.show_save()
 
     def manual_segment(self):
-        Logger.info('\n--- Manual editing ---')
+        Logger.info('--- Manual editing ---')
         plt.close('all')
 
         # Prepare SAM predictor
         if self.predictor_stale:
-            Logger.info('Preparing SAM predictor...')
+            Logger.info('Preparing SAM predictor')
             self.predictor.set_image(self.image)
             self.predictor_stale = False
         
         # Display editing interface
-        Logger.info('Displaying interactive interface...')
+        Logger.info('Displaying interactive interface')
         self.plot = si.GrainPlot(
             self.grains, 
             image=self.image, 
@@ -119,23 +120,19 @@ class RootLayout(BoxLayout):
             figsize=FIGSIZE
         )
         self.plot.activate()
-        with plt.ion():
-            plt.show(block=True)
+        plt.show(block=True)
         self.plot.deactivate()
 
+        # Process results
+        pass
+
         # Update GUI and show save dialog
+        Logger.info('Manual editing complete!')
         self.update_data_labels('Edited!')
         self.show_save()
 
     # Save/load --------------------------------------------------------------
-    def load_data(self, path, filename):
-        # Load grain data
-        self.load_grain_data(path, filename)
-        # Trigger "load summary" dialog immediately afterward
-        dialog = LoadDialog(load=self.load_summary_data, cancel=self.dismiss_popup)
-        self.show_dialog(dialog, title='Load summary data', filters=['*.csv'])
-
-    def load_grain_data(self, path, filename):
+    def load_grains(self, path, filename):
         # Load grain data csv
         Logger.info('Loading grains...')
         # HACK: Parse accidental string output
@@ -146,6 +143,7 @@ class RootLayout(BoxLayout):
                 x, y = coord.split(' ')
                 out_coords.append((float(x), float(y)))
             grains.append(shapely.Polygon(out_coords))
+        grains = [si.Grain(p.exterior.xy) for p in grains]
         self.grains = grains
         self.grains_fn = os.path.basename(filename)
         self.dismiss_popup()
@@ -173,16 +171,6 @@ class RootLayout(BoxLayout):
         self.dismiss_popup()
         Logger.info(f'Loaded checkpoint {self.sam_checkpoint_fn}.')
 
-    def load_summary_data(self, path, filename):
-        ''' Triggered after loading grains '''
-        # TODO: rebuild data, don't require loading it in?
-        Logger.info('Loading data...')
-        self.summary = pd.read_csv(filename).drop('Unnamed: 0', axis=1)
-        self.summary_fn = os.path.basename(filename)
-        self.grains = [si.Grain(p.exterior.xy, row[1]) for p, row in zip(self.grains, self.summary.iterrows())]
-        self.dismiss_popup()
-        Logger.info(f'Loaded {self.summary_fn}.')  
-
     def load_unet(self, path, filename):
         Logger.info('Loading unet model...')
         weights = segmenteverygrain.weighted_crossentropy
@@ -205,31 +193,22 @@ class RootLayout(BoxLayout):
         pd.DataFrame([g.get_polygon() for g in self.plot.grains]).to_csv(filename)
         Logger.info(f'Saved {filename}.')
 
-    # def save_mask(self, filename):
-    #     Logger.info('Saving mask...')
-    #     rasterized_image, self.mask = self.plot.get_mask()
-    #     try:
-    #         print(mask.shape)
-    #         mask = mask
-    #         keras.utils.save_img(filename, mask)
-    #         keras.utils.save_img(filename.split('.')[0] + '_visible.png', mask*127)
-    #     except:
-    #         pass
-    #     cv2.imwrite(filename, mask)
-    #     Logger.info(f'Saved {filename}.')
-    #     cv2.imwrite(filename.split('.')[0] + '_visible.png', mask*127)
-    #     Logger.info(f'Saved {filename}.')
+    def save_mask(self, filename):
+        Logger.info('Saving mask...')
+        # Computer-readable mask (pixel values are 0 or 1)
+        rasterized_image, self.mask = self.plot.get_mask()
+        self.mask = keras.utils.img_to_array(self.mask)
+        keras.utils.save_img(filename, self.mask, scale=False)
+        Logger.info(f'Saved {filename}.')
+        # Human-readable mask (pixel values are 0 or 127)
+        filename = filename.split('.')[0] + '_visible.jpg'
+        keras.utils.save_img(filename, self.mask, scale=True)
+        Logger.info(f'Saved {filename}.')
 
     def save_summary(self, filename):
         Logger.info('Saving summary data...')
         # Get measurements from plot as a pd.DataFrame
         grain_data = self.plot.get_data()
-        # Convert units
-        # TODO: Convert from pixels to real units
-        n_of_units = 1000
-        units_per_pixel = n_of_units/1552.77 # length of scale bar in pixels
-        for col in ['major_axis_length', 'minor_axis_length', 'perimeter', 'area']:
-            grain_data[col] *= units_per_pixel
         # Save CSV
         grain_data.to_csv(filename)
         Logger.info(f'Saved {filename}.')
@@ -270,8 +249,8 @@ class RootLayout(BoxLayout):
         self.save_summary(filename + '_summary.csv')
         if self.unet_image is not None:
             self.save_unet_image(filename + '_unet.jpg')
-            # self.save_mask(filename + '_mask.png')
-        self.save_grain_image(filename + '_highlighted.png')
+        self.save_mask(filename + '_mask.png')
+        self.save_grain_image(filename + '_highlighted.jpg')
         # Close plot
         plt.close(self.plot.fig)
         self.dismiss_popup()
@@ -292,9 +271,8 @@ class RootLayout(BoxLayout):
             load=self.load_sam_checkpoint, cancel=self.dismiss_popup)
         self.show_dialog(dialog, title='Load checkpoint', filters=['*.pth'])
 
-    def show_load_data(self):
-        # Triggers both "load grains" and "load summary" in sequence
-        dialog = LoadDialog(load=self.load_data, cancel=self.dismiss_popup)
+    def show_load_grains(self):
+        dialog = LoadDialog(load=self.load_grains, cancel=self.dismiss_popup)
         self.show_dialog(dialog, title='Load grain data', filters=['*.csv'])
 
     def show_load_image(self):
