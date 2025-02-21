@@ -53,7 +53,6 @@ grains, sam_labels, mask, summary, fig, ax = segmenteverygrain.sam_segmentation(
 fn = './output/test'
 
 # Grain shapes
-print(f'grains: {type(grains)} {grains}')
 pd.DataFrame(grains).to_csv(fn + '_grains.csv')
 # Grain image
 fig.savefig(fn + '_grains.jpg', bbox_inches='tight', pad_inches=0)

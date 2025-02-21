@@ -19,7 +19,7 @@ image = np.array(keras.utils.load_img(fn))
 fn = 'sam_vit_h_4b8939.pth'
 sam = segment_anything.sam_model_registry['default'](checkpoint=fn)
 predictor = segment_anything.SamPredictor(sam)
-predictor.set_image(image)
+# predictor.set_image(image)
 
 # Load grains
 fn = './output/test_grains.csv'

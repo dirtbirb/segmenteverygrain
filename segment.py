@@ -76,23 +76,26 @@ class RootLayout(BoxLayout):
         Logger.info('--- Auto-segmenting ---')
 
         # Generate prompts with UNET model
-        Logger.info('\nUNET prediction')
+        Logger.info('UNET prediction')
         self.unet_image = segmenteverygrain.predict_image(
             self.image, self.unet_model, I=256)
         unet_labels, self.unet_coords = segmenteverygrain.label_grains(
             self.image, self.unet_image, dbs_max_dist=20.0)
 
         # Apply SAM for actual segmentation
-        Logger.info('\nSAM segmenting')
+        Logger.info('SAM segmenting')
         # TODO: Separate this function into smaller chunks (plotting, mask, etc)
         # TODO: Choose min_area by image size? Do unit conversion from pixels first?
         self.grains, sam_labels, mask_all, self.summary, fig, ax = segmenteverygrain.sam_segmentation(
             self.sam, self.image, self.unet_image, self.unet_coords, unet_labels,
             min_area=MIN_AREA, plot_image=False, remove_edge_grains=False, remove_large_objects=False)
-        plt.close(fig)
+        # plt.close(fig)
+
+        # Process results
+        pass
 
         # Update GUI and show save dialog
-        Logger.info('\nAuto-segmenting complete!\n')
+        Logger.info('Auto-segmenting complete!')
         self.update_data_labels('Calculated!')
         self.show_save()
 
@@ -102,12 +105,12 @@ class RootLayout(BoxLayout):
 
         # Prepare SAM predictor
         if self.predictor_stale:
-            Logger.info('Preparing SAM predictor...')
+            Logger.info('Preparing SAM predictor')
             self.predictor.set_image(self.image)
             self.predictor_stale = False
         
         # Display editing interface
-        Logger.info('Displaying interactive interface...')
+        Logger.info('Displaying interactive interface')
         self.plot = si.GrainPlot(
             self.grains, 
             image=self.image, 
@@ -118,7 +121,11 @@ class RootLayout(BoxLayout):
         plt.show(block=True)
         self.plot.deactivate()
 
+        # Process results
+        pass
+
         # Update GUI and show save dialog
+        Logger.info('Manual editing complete!')
         self.update_data_labels('Edited!')
         self.show_save()
 
