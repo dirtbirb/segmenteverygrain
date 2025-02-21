@@ -18,6 +18,8 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.popup import Popup
 from kivy_garden.matplotlib.backend_kivyagg import FigureCanvasKivyAgg
 
+from PIL import Image
+Image.MAX_IMAGE_PIXELS = None # needed if working with very large images
 
 # HACK: Turn off crazy debug output
 import logging

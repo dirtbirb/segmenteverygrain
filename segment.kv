@@ -84,6 +84,7 @@
         disabled: root.unet_model is None or type(root.image) is type(None)
         Button:
             text: 'Autosegment'
+            background_color: (1, 0, 0, 1)
             on_release: root.auto_segment()
         Button:
             text: 'Interactive'
