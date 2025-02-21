@@ -271,9 +271,9 @@ class GrainPlot(object):
         # Push to canvas
         self.canvas.blit(self.ax.bbox)
 
-    def toggle_info(self):
+    def toggle_info(self, show=None):
         # Toggle info box flag
-        self.show_info = not self.show_info
+        self.show_info = show or not self.show_info
         # Show info box if requested and grains selected
         self.info.set_visible(self.show_info and len(self.selected_grains))
 
@@ -341,6 +341,7 @@ class GrainPlot(object):
         self.box_selector.clear()
         self.clear_points()
         self.unselect_grains()
+        self.toggle_info(False)
 
     # Manage grains ---
     def create_grain(self):
