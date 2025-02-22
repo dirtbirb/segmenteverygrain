@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import segment_anything
 import segmenteverygrain
+import segmenteverygrain.interactions as si
 
 
 DBS_MAX_DIST = 20.0
@@ -13,7 +14,7 @@ MIN_AREA = 400
 
 # Load test image
 fn = 'torrey_pines_beach_image.jpeg'
-image = np.array(keras.utils.load_img(fn))
+image = si.load_image(fn)
 
 # Load unet model
 fn = './segmenteverygrain/seg_model.keras'
@@ -32,6 +33,7 @@ plt.scatter(np.array(unet_coords)[:,0], np.array(unet_coords)[:,1], c='k')
 plt.xticks([])
 plt.yticks([])
 fig.savefig('./output/test_unet.jpg', bbox_inches='tight', pad_inches=0)
+plt.close()
 
 
 # Load SAM
@@ -45,29 +47,23 @@ grains, sam_labels, mask, summary, fig, ax = segmenteverygrain.sam_segmentation(
     sam, image, unet_image, unet_coords, unet_labels,
     min_area=MIN_AREA,
     plot_image=True,
-    remove_edge_grains=True,
+    remove_edge_grains=False,
     remove_large_objects=False)
 
 
 # Save results
+grains = [si.Grain(np.array(g.exterior.xy)) for g in grains]
+for g in grains:
+    g.make_data(image=image)
 fn = './output/test'
-
 # Grain shapes
-pd.DataFrame(grains).to_csv(fn + '_grains.csv')
+si.save_grains(fn + '_grains.csv', grains)
 # Grain image
 fig.savefig(fn + '_grains.jpg', bbox_inches='tight', pad_inches=0)
-
 # Summary data
-grain_data = summary
-print(f'grain_data: {type(grain_data)} {grain_data}')
-grain_data.to_csv(fn + '_summary.csv')
+si.save_summary(fn + '_summary.csv', grains)
 # Summary histogram
-fig, ax = segmenteverygrain.plot_histogram_of_axis_lengths(
-    grain_data['major_axis_length'], 
-    grain_data['minor_axis_length'])
-fig.savefig(fn + '_summary.jpg', bbox_inches='tight', pad_inches=0)
-
+si.save_histogram(fn + '_summary.jpg', grains)
 # Training mask
-mask = keras.utils.img_to_array(mask)
-keras.utils.save_img(fn + '_mask.png', mask, scale=False)
-keras.utils.save_img(fn + '_mask.jpg', mask, scale=True)
+si.save_mask(fn + '_mask.png', grains, image, scale=False)
+si.save_mask(fn + '_mask.jpg', grains, image, scale=True)
