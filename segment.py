@@ -29,6 +29,8 @@ for logger in [logging.getLogger(name) for name in logging.root.manager.loggerDi
 
 FIGSIZE = (12, 8)
 MIN_AREA = 400
+OVERLAP = 200
+PATCH_SIZE = 2000
 
 
 class LoadDialog(BoxLayout):
@@ -61,7 +63,7 @@ class RootLayout(BoxLayout):
     unet_model = ObjectProperty()
     unet_fn = StringProperty()
 
-    # Load defaults ----------------------------------------------------_-----
+    # Load defaults ----------------------------------------------------------
     def on_kv_post(self, widget):
         self.load_sam_checkpoint('', './sam_vit_h_4b8939.pth')
         self.load_unet('', './segmenteverygrain/seg_model.keras')
@@ -72,7 +74,7 @@ class RootLayout(BoxLayout):
 
     # Segmentation -----------------------------------------------------------
     def auto_segment(self):
-        Logger.info('--- Auto-segmenting ---')
+        Logger.info('Auto-segmenting: Normal image ---')
         plt.close('all')
 
         # Generate prompts with UNET model
@@ -99,9 +101,38 @@ class RootLayout(BoxLayout):
         Logger.info('Auto-segmenting complete!')
         self.update_data_labels('Calculated!')
         self.show_save()
+    
+    def large_segment(self):
+        Logger.info('Auto-segmenting: Large image ---')
+        plt.close('all')
+
+        # Use SEG large image prediction
+        grains, self.unet_image, self.unet_coords = segmenteverygrain.predict_large_image(
+            self.image_fn, self.unet_model, self.sam,
+            min_area=MIN_AREA, patch_size=PATCH_SIZE, overlap=OVERLAP)
+
+        # Process results -- pretty image
+        self.grains_fig, ax = plt.subplots(
+            figsize=FIGSIZE)
+        ax.set_aspect('equal')
+        segmenteverygrain.plot_image_w_colorful_grains(
+            self.image, grains, ax, cmap='Paired')
+        ax.set(xticks=[], yticks=[])
+        plt.xlim([0, np.shape(self.image)[1]])
+        plt.ylim([np.shape(self.image)[0], 0])
+
+        # Process results -- everything else
+        self.grains = [si.Grain(np.array(g.exterior.xy)) for g in grains]
+        for g in self.grains:
+            g.measure(image=self.image)
+
+        # Update GUI and show save dialog
+        Logger.info('Auto-segmenting complete!')
+        self.update_data_labels('Calculated!')
+        self.show_save()
 
     def manual_segment(self):
-        Logger.info('--- Manual editing ---')
+        Logger.info('Manual segmenting ---')
         plt.close('all')
 
         # Prepare SAM predictor
@@ -224,7 +255,7 @@ class RootLayout(BoxLayout):
         ''' 
         Save all results via save_whatever method for each type of data.
         '''
-        Logger.info('\n--- Results ---')
+        Logger.info('--- Results ---')
         # Parse input: include path and name, remove extension
         filename = os.path.join(path, filename.split('.')[0])
         # Save results
@@ -235,8 +266,8 @@ class RootLayout(BoxLayout):
         self.save_mask(filename + '_mask.png')
         self.save_grain_image(filename + '_grains.jpg')
         # Close plot
-        plt.close('all')
         self.dismiss_popup()
+        plt.close('all')
         Logger.info('Save complete!')
 
     # Popups -----------------------------------------------------------------
