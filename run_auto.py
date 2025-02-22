@@ -54,7 +54,7 @@ grains, sam_labels, mask, summary, fig, ax = segmenteverygrain.sam_segmentation(
 # Save results
 grains = [si.Grain(np.array(g.exterior.xy)) for g in grains]
 for g in grains:
-    g.make_data(image=image)
+    g.measure(image=image)
 fn = './output/test'
 # Grain shapes
 si.save_grains(fn + '_grains.csv', grains)
