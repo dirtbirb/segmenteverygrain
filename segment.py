@@ -1,10 +1,7 @@
 import keras.saving
-import keras.utils
 import matplotlib.pyplot as plt
 import numpy as np
 import os.path
-import pandas as pd
-import shapely
 import segment_anything
 import segmenteverygrain
 import segmenteverygrain.interactions as si
@@ -18,6 +15,10 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.popup import Popup
 from kivy_garden.matplotlib.backend_kivyagg import FigureCanvasKivyAgg
 
+
+# HACK: Bypass large image restriction
+from PIL import Image
+Image.MAX_IMAGE_PIXELS = None 
 
 # HACK: Turn off crazy debug output
 import logging
@@ -46,18 +47,16 @@ class SaveDialog(BoxLayout):
 class RootLayout(BoxLayout):
     # Internal properties
     _popup = ObjectProperty()
-    # mask = ObjectProperty(allownone=True)
-    plot = ObjectProperty(allownone=True)
     predictor = ObjectProperty()
     predictor_stale = BooleanProperty(True)
     # User settables
     grains = ListProperty()
+    grains_fig = ObjectProperty()
     grains_fn = StringProperty()
     image = ObjectProperty()
     image_fn = StringProperty()
     sam = ObjectProperty()
     sam_checkpoint_fn = StringProperty()
-    summary = ObjectProperty(allownone=True)
     unet_image = ObjectProperty()
     unet_model = ObjectProperty()
     unet_fn = StringProperty()
@@ -74,6 +73,7 @@ class RootLayout(BoxLayout):
     # Segmentation -----------------------------------------------------------
     def auto_segment(self):
         Logger.info('--- Auto-segmenting ---')
+        plt.close('all')
 
         # Generate prompts with UNET model
         Logger.info('UNET prediction')
@@ -86,13 +86,14 @@ class RootLayout(BoxLayout):
         Logger.info('SAM segmenting')
         # TODO: Separate this function into smaller chunks (plotting, mask, etc)
         # TODO: Choose min_area by image size? Do unit conversion from pixels first?
-        self.grains, sam_labels, mask_all, self.summary, fig, ax = segmenteverygrain.sam_segmentation(
+        grains, sam_labels, mask_all, summary, self.grains_fig, ax = segmenteverygrain.sam_segmentation(
             self.sam, self.image, self.unet_image, self.unet_coords, unet_labels,
-            min_area=MIN_AREA, plot_image=False, remove_edge_grains=False, remove_large_objects=False)
-        # plt.close(fig)
+            min_area=MIN_AREA, plot_image=True, remove_edge_grains=False, remove_large_objects=False)
 
         # Process results
-        pass
+        self.grains = [si.Grain(np.array(g.exterior.xy)) for g in grains]
+        for g in self.grains:
+            g.measure(image=self.image)
 
         # Update GUI and show save dialog
         Logger.info('Auto-segmenting complete!')
@@ -111,18 +112,18 @@ class RootLayout(BoxLayout):
         
         # Display editing interface
         Logger.info('Displaying interactive interface')
-        self.plot = si.GrainPlot(
+        plot = si.GrainPlot(
             self.grains, 
             image=self.image, 
             predictor=self.predictor,
             figsize=FIGSIZE
         )
-        self.plot.activate()
+        plot.activate()
         plt.show(block=True)
-        self.plot.deactivate()
+        plot.deactivate()
 
         # Process results
-        pass
+        self.grains_fig = plot.fig
 
         # Update GUI and show save dialog
         Logger.info('Manual editing complete!')
@@ -133,31 +134,21 @@ class RootLayout(BoxLayout):
     def load_grains(self, path, filename):
         # Load grain data csv
         Logger.info('Loading grains...')
-        # HACK: Parse accidental string output
-        grains = []
-        for grain in pd.read_csv(filename).iterrows():
-            out_coords = []
-            for coord in grain[1].iloc[1][10:-2].split(', '):
-                x, y = coord.split(' ')
-                out_coords.append((float(x), float(y)))
-            grains.append(shapely.Polygon(out_coords))
-        grains = [si.Grain(p.exterior.xy) for p in grains]
-        self.grains = grains
+        self.grains = si.load_grains(filename)
         self.grains_fn = os.path.basename(filename)
         self.dismiss_popup()
         Logger.info(f'Loaded {self.grains_fn}.')
 
     def load_image(self, path, filename):
         Logger.info('Loading image...')
-        self.image = np.array(keras.utils.load_img(filename))
+        self.image = si.load_image(filename)
         self.ids.image.source = filename
         self.image_fn = os.path.basename(filename)
         self.dismiss_popup()
         # Update image predictor next time manual editing is used
         self.predictor_stale = True
-        # Clear grains and summary data, probably applied to a different image
+        # Clear grain information, probably applied to a different image
         self.grains = []
-        self.summary = None
         self.update_data_labels()
         Logger.info(f'Loaded {self.image_fn}.')
 
@@ -180,44 +171,39 @@ class RootLayout(BoxLayout):
         Logger.info(f'Loaded {self.unet_fn}.')  
 
     def save_grain_image(self, filename):
+        # TODO
         Logger.info('Saving grain image...')
-        self.plot.fig.savefig(filename, bbox_inches='tight', pad_inches=0)
+        self.grains_fig.savefig(filename, bbox_inches='tight', pad_inches=0)
         self.ids.image.source = filename
         self.dismiss_popup()
         Logger.info(f'Saved {filename}.')
 
     def save_grains(self, filename):
         Logger.info('Saving grain data...')
-        pd.DataFrame([g.get_polygon() for g in self.plot.grains]).to_csv(filename)
+        si.save_grains(filename, self.grains)
         Logger.info(f'Saved {filename}.')
 
-    def save_mask(self, filename):
+    def save_mask(self, filename, readable=True):
         Logger.info('Saving mask...')
         # Computer-readable mask (pixel values are 0 or 1)
-        rasterized_image, self.mask = self.plot.get_mask()
-        self.mask = keras.utils.img_to_array(self.mask)
-        keras.utils.save_img(filename, self.mask, scale=False)
+        si.save_mask(filename, self.grains, self.image, scale=False)
         Logger.info(f'Saved {filename}.')
         # Human-readable mask (pixel values are 0 or 127)
-        filename = filename.split('.')[0] + '_visible.jpg'
-        keras.utils.save_img(filename, self.mask, scale=True)
-        Logger.info(f'Saved {filename}.')
+        if readable:
+            filename = filename.split('.')[0] + '.jpg'
+            si.save_mask(filename, self.grains, self.image, scale=True)
+            Logger.info(f'Saved {filename}.')
 
-    def save_summary(self, filename):
+    def save_summary(self, filename, histogram=True):
         Logger.info('Saving summary data...')
-        # Get measurements from plot as a pd.DataFrame
-        grain_data = self.plot.get_data()
-        # Save CSV
-        grain_data.to_csv(filename)
+        # Get measurements from plot as a DataFrame
+        si.save_summary(filename, self.grains)
         Logger.info(f'Saved {filename}.')
         # Build and save histogram
-        filename = filename.split('.')[0] + '.jpg'
-        fig, ax = segmenteverygrain.plot_histogram_of_axis_lengths(
-            grain_data['major_axis_length']/1000, 
-            grain_data['minor_axis_length']/1000)
-        fig.savefig(filename, bbox_inches='tight', pad_inches=0)
-        plt.close(fig)
-        Logger.info(f'Saved {filename}.')
+        if histogram:
+            filename = filename.split('.')[0] + '.jpg'
+            si.save_histogram(filename, self.grains)
+            Logger.info(f'Saved {filename}.')
 
     def save_unet_image(self, filename):
         # Save unet results for verification (auto segmenting!)
@@ -228,8 +214,7 @@ class RootLayout(BoxLayout):
         plt.scatter(
             np.array(self.unet_coords)[:,0],
             np.array(self.unet_coords)[:,1],
-            c='k'
-        )
+            c='k')
         ax.set(xticks=[], yticks=[])
         fig.savefig(filename, bbox_inches='tight', pad_inches=0)
         plt.close(fig)
@@ -248,9 +233,9 @@ class RootLayout(BoxLayout):
         if self.unet_image is not None:
             self.save_unet_image(filename + '_unet.jpg')
         self.save_mask(filename + '_mask.png')
-        self.save_grain_image(filename + '_highlighted.jpg')
+        self.save_grain_image(filename + '_grains.jpg')
         # Close plot
-        plt.close(self.plot.fig)
+        plt.close('all')
         self.dismiss_popup()
         Logger.info('Save complete!')
 
