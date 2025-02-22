@@ -69,7 +69,7 @@ class Grain(object):
         poly = shapely.Polygon(self.xy.T)
         return poly
 
-    def make_data(self, ax:mpl.axes.Axes=None, image=None) -> pd.Series:
+    def measure(self, ax:mpl.axes.Axes=None, image=None) -> pd.Series:
         '''
         Calculate grain information from image and matplotlib patch.
         Overwrites self.data.
@@ -98,7 +98,7 @@ class Grain(object):
         if len(data):
             self.data = data.iloc[0]
         else:
-            print('MAKE_DATA_ERROR ', pd.DataFrame(data))
+            print('MEASURE_ERROR ', pd.DataFrame(data))
             self.data = pd.Series()
         return self.data
 
@@ -132,7 +132,7 @@ class Grain(object):
         self.normal_props['facecolor'] = self.patch.get_facecolor()
         # Compute grain data if not provided
         if self.data is None:
-            self.data = self.make_data(ax)
+            self.data = self.measure(ax)
         return self.patch
 
     def select(self) -> bool:

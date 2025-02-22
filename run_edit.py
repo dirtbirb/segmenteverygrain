@@ -38,10 +38,10 @@ plot.deactivate()
 fn = './output/test'
 # Grain shapes
 # for g in grains:
-#     g.make_data(image=image)
+#     g.measure(image=image)
 si.save_grains(fn + '_grains.csv', plot.grains)
 # Grain image
-# plot.savefig(fn + '_grains.jpg')
+plot.savefig(fn + '_grains.jpg')
 # Summary data
 si.save_summary(fn + '_summary.csv', plot.grains)
 # Summary histogram
