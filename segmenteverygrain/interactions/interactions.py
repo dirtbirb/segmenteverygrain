@@ -26,7 +26,7 @@ if 'c' in mpl.rcParams['keymap.back']:
 class Grain(object):
     ''' Stores data and plot representation for a single grain. '''
         
-    def __init__(self, xy:list=[], data:pd.Series=None):
+    def __init__(self, xy:np.ndarray, data:pd.Series=None):
         '''
         Parameters
         ----------
@@ -38,7 +38,7 @@ class Grain(object):
         
         # Input
         self.data = data
-        self.xy = xy
+        self.xy = np.array(xy)
         # Grain properties to calculate
         self.region_props = [
             'label',
@@ -615,6 +615,7 @@ def get_histogram(grains):
 def save_histogram(fn, grains):
     fig, ax = get_histogram(grains)
     fig.savefig(fn, bbox_inches='tight', pad_inches=0)
+    plt.close(fig)
 
 
 def get_mask(grains, image):
