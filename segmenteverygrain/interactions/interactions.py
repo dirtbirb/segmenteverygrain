@@ -1,3 +1,4 @@
+import keras.utils
 import matplotlib as mpl
 import matplotlib.style as mplstyle
 import matplotlib.patches as mpatches
@@ -65,9 +66,10 @@ class Grain(object):
 
     def get_polygon(self) -> shapely.Polygon:
         ''' Return a shapely.Polygon representing the matplotlib patch. '''
-        return shapely.Polygon(self.patch.get_path().vertices)
+        poly = shapely.Polygon(self.xy.T)
+        return poly
 
-    def make_data(self, ax:mpl.axes.Axes) -> pd.Series:
+    def make_data(self, ax:mpl.axes.Axes=None, image=None) -> pd.Series:
         '''
         Calculate grain information from image and matplotlib patch.
         Overwrites self.data.
@@ -84,7 +86,8 @@ class Grain(object):
             Row for a DataFrame containing computed grain info.
         '''
         # Get image and labeled region
-        image = ax.get_images()[0].get_array()
+        if ax:
+            image = ax.get_images()[0].get_array()
         label = rasterio.features.rasterize(
             [self.get_polygon()], out_shape=image.shape[:2])
         # Calculate region properties
@@ -388,6 +391,7 @@ class GrainPlot(object):
         # Remove selected grains from plot, data, and undo list
         for grain in self.selected_grains:
             grain.patch.remove()
+            self.grains.remove(grain)
             if grain in self.created_grains:
                 self.created_grains.remove(grain)
         self.unselect_all()
@@ -568,3 +572,57 @@ class GrainPlot(object):
     def get_data(self) -> pd.DataFrame:
         ''' Return up-to-date DataFrame of grain stats. '''
         return pd.concat([g.data for g in self.grains], axis=1).T
+
+    def savefig(self, fn):
+        self.fig.savefig(fn, bbox_inches='tight', pad_inches=0)
+
+
+def load_image(fn):
+    return np.array(keras.utils.load_img(fn))
+
+
+def load_grains(fn):
+    grains = []
+    for grain in pd.read_csv(fn).iterrows():
+        out_coords = []
+        for coord in grain[1].iloc[1][10:-2].split(', '):
+            x, y = coord.split(' ')
+            out_coords.append((float(x), float(y)))
+        grains.append(shapely.Polygon(out_coords))
+    grains = [Grain(np.array(p.exterior.xy)) for p in grains]
+    return grains
+
+
+def save_grains(fn, grains):
+    pd.DataFrame([g.get_polygon() for g in grains]).to_csv(fn)
+
+
+def get_summary(grains):
+    return pd.concat([g.data for g in grains], axis=1).T
+
+
+def save_summary(fn, grains):
+    get_summary(grains).to_csv(fn)
+
+
+def get_histogram(grains):
+    df = get_summary(grains)
+    fig, ax = segmenteverygrain.plot_histogram_of_axis_lengths(
+        df['major_axis_length'], df['minor_axis_length'])
+    return fig, ax
+    
+
+def save_histogram(fn, grains):
+    fig, ax = get_histogram(grains)
+    fig.savefig(fn, bbox_inches='tight', pad_inches=0)
+
+
+def get_mask(grains, image):
+    grains = [g.get_polygon() for g in grains]
+    rasterized_image, mask = segmenteverygrain.create_labeled_image(
+        grains, image)
+    mask = keras.utils.img_to_array(mask)
+    return mask
+
+def save_mask(fn, grains, image, scale=False):
+    keras.utils.save_img(fn, get_mask(grains, image), scale=scale)
