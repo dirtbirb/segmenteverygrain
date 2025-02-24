@@ -27,6 +27,8 @@ for logger in [logging.getLogger(name) for name in logging.root.manager.loggerDi
         logger.setLevel(30)
 
 
+FIGURE_DPI = 72
+# FIGSIZE = (img_x/FIGURE_DPI, img_y/FIGURE_DPI)
 FIGSIZE = (12, 8)
 MIN_AREA = 400
 OVERLAP = 200
@@ -36,6 +38,11 @@ PATCH_SIZE = 2000
 class LoadDialog(BoxLayout):
     cancel = ObjectProperty()
     load = ObjectProperty()
+
+
+class PointCountDialog(BoxLayout):
+    cancel = ObjectProperty()
+    count = ObjectProperty()
 
 
 class SaveDialog(BoxLayout):
@@ -161,6 +168,54 @@ class RootLayout(BoxLayout):
         self.update_data_labels('Edited!')
         self.show_save()
 
+    def point_count(self, spacing: int):
+        self.dismiss_popup()
+        Logger.info('Point count ---')
+        Logger.info(f'Spacing: {spacing} pixels')
+
+        # Find and measure grains at grid locations
+        Logger.info('Performing count')
+        points, xs, ys = si.make_grid(self.image, spacing)
+        grains, points_found = si.filter_grains_by_points(self.grains, points)
+        for g in grains:
+            if g.data is None:
+                g.measure(image=self.image)
+        
+        # Make GrainPlot and save it as a static image
+        Logger.info('Plotting results')
+        img_y, img_x = self.image.shape[:2]
+        plot = si.GrainPlot(grains, self.image, 
+            figsize=(img_x/FIGURE_DPI, img_y/FIGURE_DPI), 
+            dpi=FIGURE_DPI,
+            image_alpha=0.5)
+        plot_image = np.asarray(plot.canvas.buffer_rgba(), dtype=np.uint8)
+
+        # Make new plot using static GrainPlot image as background
+        fig = plt.figure(
+            figsize=(img_x/FIGURE_DPI, img_y/FIGURE_DPI),
+            dpi=FIGURE_DPI)
+        ax = fig.add_subplot()
+        ax.imshow(plot_image, aspect='equal', origin='lower')
+        ax.autoscale(enable=False)
+
+        # Plot axes
+        for grain in grains:
+            grain.draw_axes(ax)
+
+        # Plot grid
+        point_colors = ['lime' if p else 'red' for p in points_found]
+        ax.scatter(xs, ys,
+            s=min(plot_image[:2].shape) * FIGURE_DPI,
+            c=point_colors,
+            edgecolors='black')
+        self.grains_fig = fig
+
+        # Update GUI and show save dialog
+        Logger.info('Point count complete!')
+        self.grains = grains
+        self.show_save()
+
+
     # Save/load --------------------------------------------------------------
     def load_grains(self, path, filename):
         # Load grain data csv
@@ -251,7 +306,7 @@ class RootLayout(BoxLayout):
         plt.close(fig)
         Logger.info(f'Saved {filename}.')
 
-    def save(self, path, filename):
+    def save(self, path, filename, grains=None):
         ''' 
         Save all results via save_whatever method for each type of data.
         '''
@@ -276,7 +331,8 @@ class RootLayout(BoxLayout):
             self._popup.dismiss()
 
     def show_dialog(self, dialog, title='', filters=[]):
-        dialog.ids.filechooser.filters = filters
+        if 'filechooser' in dialog.ids:
+            dialog.ids.filechooser.filters = filters
         self._popup = Popup(title=title, content=dialog)
         self._popup.open()
 
@@ -298,6 +354,11 @@ class RootLayout(BoxLayout):
     def show_load_unet(self):
         dialog = LoadDialog(load=self.load_unet, cancel=self.dismiss_popup)
         self.show_dialog(dialog, title='Load Unet model', filters=['*.keras'])
+
+    def show_point_count(self):
+        dialog = PointCountDialog(
+            count=self.point_count, cancel=self.dismiss_popup)
+        self.show_dialog(dialog, title='Grid spacing')
 
     def show_save(self):
         dialog = SaveDialog(
