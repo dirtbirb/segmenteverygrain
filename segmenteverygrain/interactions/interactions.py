@@ -648,7 +648,7 @@ def save_mask(fn, grains, image, scale=False):
 
 
 # Point count ---
-def make_grid(image:np.ndarray, spacing:int) -> list:
+def make_grid(image:np.ndarray, spacing:int):
     img_y, img_x = image.shape[:2]
     pad_x = img_x % spacing
     pad_y = img_y % spacing
@@ -656,14 +656,14 @@ def make_grid(image:np.ndarray, spacing:int) -> list:
     y_vals = np.arange(round(pad_y / 2), img_y, spacing)
     xs, ys = np.meshgrid(x_vals, y_vals)
     points = shapely.points(xs, ys).flatten()
-    return points
+    return points, xs, ys
 
 
-def filter_grains_by_points(grains:list, points:list) -> list, list:
+def filter_grains_by_points(grains:list, points:list) -> tuple:
     point_found = []
     point_grains = []
     for point in points:
-        for grain in grains:
+        for grain in grains.copy():
             if grain.get_polygon().contains(point):
                 grains.remove(grain)
                 point_grains.append(grain)
