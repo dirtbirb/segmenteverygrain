@@ -96,7 +96,7 @@ class Grain(object):
             label, intensity_image=image, properties=self.region_props)
         data = pd.DataFrame(data)
         if len(data):
-            self.data = data.iloc[0]
+            self.data = data.iloc[0].drop('label')
         else:
             print('MEASURE_ERROR ', pd.DataFrame(data))
             self.data = pd.Series()
@@ -135,6 +135,21 @@ class Grain(object):
             self.data = self.measure(ax)
         return self.patch
 
+    def draw_axes(self, ax:mpl.axes.Axes):
+        if self.data is None:
+            self.measure(ax.get_images()[0].get_array())
+        data = self.data
+
+        x0, y0 = data['centroid-1'], data['centroid-0']
+        ax.plot(x0, y0, '.k')
+        orientation = data['orientation']
+        x1 = x0 + np.cos(orientation) * 0.5 * data['minor_axis_length']
+        y1 = y0 - np.sin(orientation) * 0.5 * data['minor_axis_length']
+        ax.plot((x0, x1), (y0, y1), '-k')
+        x2 = x0 - np.sin(orientation) * 0.5 * data['major_axis_length']
+        y2 = y0 - np.cos(orientation) * 0.5 * data['major_axis_length']
+        ax.plot((x0, x2), (y0, y2), '-k')
+
     def select(self) -> bool:
         '''
         Toggle whether grain is selected/unselected in a plot.
@@ -156,10 +171,11 @@ class GrainPlot(object):
     def __init__(self,
             grains:list=[], 
             image=None, 
-            predictor=None, 
-            figsize=(6, 4), 
+            predictor=None,
             blit=True,
-            minspan=10):
+            minspan=10,
+            image_alpha=1,
+            **kwargs):
         '''
         Parameters
         ----------
@@ -196,11 +212,11 @@ class GrainPlot(object):
         self.selected_grains = []
         
         # Plot
-        self.fig = plt.figure(figsize=figsize)
+        self.fig = plt.figure(**kwargs)
         self.canvas = self.fig.canvas
         self.ax = self.fig.add_subplot(aspect='equal', xticks=[], yticks=[])
         if isinstance(image, np.ndarray):
-            self.ax.imshow(image)
+            self.ax.imshow(image, alpha=image_alpha)
             self.ax.autoscale(enable=False)
         self.fig.tight_layout(pad=0)
         
@@ -577,6 +593,7 @@ class GrainPlot(object):
         self.fig.savefig(fn, bbox_inches='tight', pad_inches=0)
 
 
+# Load/save ---
 def load_image(fn):
     return np.array(keras.utils.load_img(fn))
 
@@ -625,5 +642,33 @@ def get_mask(grains, image):
     mask = keras.utils.img_to_array(mask)
     return mask
 
+
 def save_mask(fn, grains, image, scale=False):
     keras.utils.save_img(fn, get_mask(grains, image), scale=scale)
+
+
+# Point count ---
+def make_grid(image:np.ndarray, spacing:int) -> list:
+    img_y, img_x = image.shape[:2]
+    pad_x = img_x % spacing
+    pad_y = img_y % spacing
+    x_vals = np.arange(round(pad_x / 2), img_x, spacing)
+    y_vals = np.arange(round(pad_y / 2), img_y, spacing)
+    xs, ys = np.meshgrid(x_vals, y_vals)
+    points = shapely.points(xs, ys).flatten()
+    return points
+
+
+def filter_grains_by_points(grains:list, points:list) -> list, list:
+    point_found = []
+    point_grains = []
+    for point in points:
+        for grain in grains:
+            if grain.get_polygon().contains(point):
+                grains.remove(grain)
+                point_grains.append(grain)
+                point_found.append(True)
+                break
+        else:
+            point_found.append(False)
+    return point_grains, point_found
