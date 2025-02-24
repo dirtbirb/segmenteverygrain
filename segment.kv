@@ -23,6 +23,23 @@
                 text: 'Cancel'
                 on_release: root.cancel()
 
+<PointCountDialog>:
+    orientation: 'vertical'
+    Widget:
+    Row:
+        Label:
+            text: 'Enter grid spacing (px): '
+        TextInput:
+            id: spacing
+    Row:
+        Button:
+            text: 'Count'
+            on_release: root.count(int(spacing.text))
+        Button:
+            text: 'Cancel'
+            on_release: root.cancel()
+    Widget:       
+
 <SaveDialog>:
     text_input: text_input
     BoxLayout:
@@ -94,5 +111,10 @@
             text: 'Interactive'
             background_color: (0, 0, 1, 1)
             on_release: root.manual_segment()
+        Button:
+            text: 'Point count'
+            background_color: (1, 1, 0, 1)
+            on_release: root.show_point_count()
+            disabled: not len(root.grains)
 
 RootLayout:

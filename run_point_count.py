@@ -11,6 +11,7 @@ SPACING = 220       # px
 # Load image
 fn = 'torrey_pines_beach_image.jpeg'
 image = si.load_image(fn)
+img_y, img_x = image.shape[:2]
 
 # Load grains
 fn = './output/test_grains.csv'
@@ -18,7 +19,7 @@ grains = si.load_grains(fn)
 
 
 # Find and measure grains according to a grid
-points = si.make_grid(image, SPACING)
+points, xs, ys = si.make_grid(image, SPACING)
 grains, points_found = si.filter_grains_by_points(grains, points)
 for g in grains:
     g.measure(image=image)
