@@ -16,8 +16,7 @@ This unofficial fork attempts to build on the core features of segmenteverygrain
 ### Automated grain detection
 
 <img src="docs/auto.jpg" width="600">
-<br>
-<br>
+
 The original automated grain detection and segmentation process as laid out in [Segment_every_grain.ipynb](segmenteverygrain/Segment_every_grain.ipynb) has not been significantly modified except for how results are saved. The notebook itself has not been modified at all.
 
 #### Usage
@@ -26,8 +25,7 @@ The original automated grain detection and segmentation process as laid out in [
 ### Interactive interface
 
 <img src="docs/interactive.jpg" width="600">
-<br>
-<br>
+
 The original manual editing interface has been modified to facilitate:
 
 - Increased FPS, especially with high grain counts
@@ -53,8 +51,7 @@ Run the new interactive interface through the GUI or directly using [run_edit.py
 ### Automated grid count
 
 <img src="docs/grid_count.jpg" width="600">
-<br>
-<br>
+
 The results of segmenteverygrain can be used to simulate the results of a manual grid count. This provides less information than segmentation of a complete image, but is more comparable to traditional methods. Currently there is no fine-grain cutoff threshold and points not directly landing on a grain are simply excluded.
 
 #### Usage
@@ -63,8 +60,7 @@ After using segmenteverygrain to generate a grain info csv, generate a grid coun
 ### Graphical interface
 
 <img src="docs/gui.jpg" width="600">
-<br>
-<br>
+
 The core functions of segmenteverygrain have been wrapped into an optional, experimental GUI in order to provide a familiar user experience. Features include:
 
 - Automated grain detection and segmentation, mostly following the process laid out in the original [Segment_every_grain.ipynb](segmenteverygrain/Segment_every_grain.ipynb) Jupyter Notebook
