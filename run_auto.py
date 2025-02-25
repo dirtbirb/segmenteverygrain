@@ -7,9 +7,10 @@ import segmenteverygrain
 import segmenteverygrain.interactions as si
 
 
-DBS_MAX_DIST = 20.0
-I = 256
-MIN_AREA = 400
+DBS_MAX_DIST = 20.0 # px
+I = 256             # px?
+MIN_AREA = 400      # px
+PX_PER_M = 1        # px/m
 
 
 # Load test image
@@ -51,19 +52,19 @@ grains, sam_labels, mask, summary, fig, ax = segmenteverygrain.sam_segmentation(
     remove_large_objects=False)
 
 
-# Save results
+# Extract results
 grains = [si.Grain(np.array(g.exterior.xy)) for g in grains]
 for g in grains:
     g.measure(image=image)
-fn = './output/test'
+fn = './output/test_auto'
 # Grain shapes
 si.save_grains(fn + '_grains.csv', grains)
 # Grain image
 fig.savefig(fn + '_grains.jpg', bbox_inches='tight', pad_inches=0)
 # Summary data
-si.save_summary(fn + '_summary.csv', grains)
+si.save_summary(fn + '_summary.csv', grains, px_per_m=PX_PER_M)
 # Summary histogram
-si.save_histogram(fn + '_summary.jpg', grains)
+si.save_histogram(fn + '_summary.jpg', grains, px_per_m=PX_PER_M)
 # Training mask
 si.save_mask(fn + '_mask.png', grains, image, scale=False)
 si.save_mask(fn + '_mask.jpg', grains, image, scale=True)

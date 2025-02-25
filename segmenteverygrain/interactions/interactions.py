@@ -1,3 +1,4 @@
+import functools
 import keras.utils
 import matplotlib as mpl
 import matplotlib.style as mplstyle
@@ -40,18 +41,18 @@ class Grain(object):
         self.data = data
         self.xy = np.array(xy)
         # Grain properties to calculate
-        self.region_props = [
-            'label',
-            'area',
-            'centroid',
-            'major_axis_length',
-            'minor_axis_length', 
-            'orientation',
-            'perimeter',
-            'max_intensity',
-            'mean_intensity',
-            'min_intensity'
-        ]
+        # {name: dimensionality}
+        self.region_props = {
+            'area': 2,
+            'centroid': 0,
+            'major_axis_length': 1,
+            'minor_axis_length': 1, 
+            'orientation': 0,
+            'perimeter': 1,
+            'max_intensity': 0,
+            'mean_intensity': 0,
+            'min_intensity': 0
+        }
         # Display
         self.normal_props = {
             'alpha': 0.6
@@ -64,12 +65,12 @@ class Grain(object):
         self.patch = None
         self.selected = False
 
-    def get_polygon(self) -> shapely.Polygon:
+    @functools.cached_property
+    def polygon(self) -> shapely.Polygon:
         ''' Return a shapely.Polygon representing the matplotlib patch. '''
-        poly = shapely.Polygon(self.xy.T)
-        return poly
+        return shapely.Polygon(self.xy.T)
 
-    def measure(self, ax:mpl.axes.Axes=None, image=None) -> pd.Series:
+    def measure(self, image:np.ndarray) -> pd.Series:
         '''
         Calculate grain information from image and matplotlib patch.
         Overwrites self.data.
@@ -85,21 +86,18 @@ class Grain(object):
         self.data : pd.Series
             Row for a DataFrame containing computed grain info.
         '''
-        # Get image and labeled region
-        if ax:
-            image = ax.get_images()[0].get_array()
-        label = rasterio.features.rasterize(
-            [self.get_polygon()], out_shape=image.shape[:2])
+        # Get rasterized shape
+        rasterized = rasterio.features.rasterize(
+            [self.polygon], out_shape=image.shape[:2])
         # Calculate region properties
-        # TODO: Avoid going list -> DataFrame -> Series
-        data = skimage.measure.regionprops_table(
-            label, intensity_image=image, properties=self.region_props)
-        data = pd.DataFrame(data)
+        data = pd.DataFrame(skimage.measure.regionprops_table(rasterized,
+            intensity_image=image, properties=self.region_props.keys()))
         if len(data):
-            self.data = data.iloc[0].drop('label')
+            self.data = data.iloc[0]
         else:
             print('MEASURE_ERROR ', pd.DataFrame(data))
             self.data = pd.Series()
+            return
         return self.data
 
     def make_patch(self, ax:mpl.axes.Axes) -> mpatches.Polygon:
@@ -131,8 +129,9 @@ class Grain(object):
         # Save assigned color (for select/unselect)
         self.normal_props['facecolor'] = self.patch.get_facecolor()
         # Compute grain data if not provided
+        image = ax.get_images()[0].get_array()
         if self.data is None:
-            self.data = self.measure(ax)
+            self.data = self.measure(image)
         return self.patch
 
     def draw_axes(self, ax:mpl.axes.Axes):
@@ -169,7 +168,7 @@ class GrainPlot(object):
     ''' Interactive plot to create, delete, and merge grains. '''
 
     def __init__(self,
-            grains:list=[], 
+            grains:list=[],
             image=None, 
             predictor=None,
             blit=True,
@@ -422,7 +421,7 @@ class GrainPlot(object):
             return
         # Find vertices of merged grains using Shapely
         poly = shapely.unary_union(
-            [g.get_polygon() for g in self.selected_grains])
+            [g.polygon for g in self.selected_grains])
         # Verify grains actually overlap, otherwise reject selections
         if isinstance(poly, shapely.MultiPolygon):
             self.unselect_grains()
@@ -582,7 +581,7 @@ class GrainPlot(object):
     # Output ---
     def get_mask(self) -> list:
         ''' Return labeled image for Unet training. '''
-        all_grains = [g.get_polygon() for g in self.grains]
+        all_grains = [g.polygon for g in self.grains]
         return segmenteverygrain.create_labeled_image(all_grains, self.image)
 
     def get_data(self) -> pd.DataFrame:
@@ -611,32 +610,40 @@ def load_grains(fn):
 
 
 def save_grains(fn, grains):
-    pd.DataFrame([g.get_polygon() for g in grains]).to_csv(fn)
+    pd.DataFrame([g.polygon for g in grains]).to_csv(fn)
 
 
-def get_summary(grains):
-    return pd.concat([g.data for g in grains], axis=1).T
+def get_summary(grains, px_per_m=1):
+    # Get DataFrame
+    df = pd.concat([g.data for g in grains], axis=1).T
+    # Convert units
+    # HACK: Applies first grain's region_props to all
+    for k, d in grains[0].region_props.items():
+        if d:
+            for col in [c for c in df.columns if k in c]:
+                df[col] /= px_per_m ** d 
+    return df
 
 
-def save_summary(fn, grains):
-    get_summary(grains).to_csv(fn)
+def save_summary(fn, grains, px_per_m=1):
+    get_summary(grains, px_per_m).to_csv(fn)
 
 
-def get_histogram(grains):
-    df = get_summary(grains)
+def get_histogram(grains, px_per_m=1):
+    df = get_summary(grains, px_per_m)
     fig, ax = segmenteverygrain.plot_histogram_of_axis_lengths(
         df['major_axis_length'], df['minor_axis_length'])
     return fig, ax
     
 
-def save_histogram(fn, grains):
-    fig, ax = get_histogram(grains)
+def save_histogram(fn, grains, px_per_m=1):
+    fig, ax = get_histogram(grains, px_per_m)
     fig.savefig(fn, bbox_inches='tight', pad_inches=0)
     plt.close(fig)
 
 
 def get_mask(grains, image):
-    grains = [g.get_polygon() for g in grains]
+    grains = [g.polygon for g in grains]
     rasterized_image, mask = segmenteverygrain.create_labeled_image(
         grains, image)
     mask = keras.utils.img_to_array(mask)
@@ -664,7 +671,7 @@ def filter_grains_by_points(grains:list, points:list) -> tuple:
     point_grains = []
     for point in points:
         for grain in grains.copy():
-            if grain.get_polygon().contains(point):
+            if grain.polygon.contains(point):
                 grains.remove(grain)
                 point_grains.append(grain)
                 point_found.append(True)

@@ -10,7 +10,7 @@ import kivy
 kivy.require('2.3.1')
 from kivy.app import App
 from kivy.logger import Logger, LOG_LEVELS
-from kivy.properties import BooleanProperty, ListProperty, ObjectProperty, StringProperty
+from kivy.properties import BooleanProperty, ListProperty, NumericProperty, ObjectProperty, StringProperty
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.popup import Popup
 from kivy_garden.matplotlib.backend_kivyagg import FigureCanvasKivyAgg
@@ -64,6 +64,7 @@ class RootLayout(BoxLayout):
     grains_fn = StringProperty()
     image = ObjectProperty()
     image_fn = StringProperty()
+    px_per_m = NumericProperty(1)
     sam = ObjectProperty()
     sam_checkpoint_fn = StringProperty()
     unet_image = ObjectProperty()
@@ -102,7 +103,7 @@ class RootLayout(BoxLayout):
         # Process results
         self.grains = [si.Grain(np.array(g.exterior.xy)) for g in grains]
         for g in self.grains:
-            g.measure(image=self.image)
+            g.measure(self.image)
 
         # Update GUI and show save dialog
         Logger.info('Auto-segmenting complete!')
@@ -131,7 +132,7 @@ class RootLayout(BoxLayout):
         # Process results -- everything else
         self.grains = [si.Grain(np.array(g.exterior.xy)) for g in grains]
         for g in self.grains:
-            g.measure(image=self.image)
+            g.measure(self.image)
 
         # Update GUI and show save dialog
         Logger.info('Auto-segmenting complete!')
@@ -171,6 +172,8 @@ class RootLayout(BoxLayout):
     def point_count(self, spacing: int):
         self.dismiss_popup()
         Logger.info('Point count ---')
+        Logger.info(f'Spacing: {spacing} meters')
+        spacing *= self.px_per_m
         Logger.info(f'Spacing: {spacing} pixels')
 
         # Find and measure grains at grid locations
@@ -179,7 +182,7 @@ class RootLayout(BoxLayout):
         grains, points_found = si.filter_grains_by_points(self.grains, points)
         for g in grains:
             if g.data is None:
-                g.measure(image=self.image)
+                g.measure(self.image)
         
         # Make GrainPlot and save it as a static image
         Logger.info('Plotting results')
@@ -283,12 +286,12 @@ class RootLayout(BoxLayout):
     def save_summary(self, filename, histogram=True):
         Logger.info('Saving summary data...')
         # Get measurements from plot as a DataFrame
-        si.save_summary(filename, self.grains)
+        si.save_summary(filename, self.grains, self.px_per_m)
         Logger.info(f'Saved {filename}.')
         # Build and save histogram
         if histogram:
             filename = filename.split('.')[0] + '.jpg'
-            si.save_histogram(filename, self.grains)
+            si.save_histogram(filename, self.grains, self.px_per_m)
             Logger.info(f'Saved {filename}.')
 
     def save_unet_image(self, filename):
