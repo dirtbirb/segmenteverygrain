@@ -104,7 +104,7 @@
             text: 'Pixels per meter'
         TextInput:
             text: str(root.px_per_m)
-            background_color: 'red' if root.px_per_m == 1 else 'green'
+            background_color: 'white' if root.px_per_m == 1 else 'green'
             on_text_validate: root.px_per_m = int(self.text)
     Image:
         id: image
