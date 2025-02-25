@@ -1,5 +1,8 @@
 #:kivy 2.3.1
 
+<TextInput>:
+    multiline: False
+
 <Row@BoxLayout>:
     orientation: 'horizontal'
     size_hint_y: 1
@@ -28,9 +31,11 @@
     Widget:
     Row:
         Label:
-            text: 'Enter grid spacing (px): '
+            text: 'Enter grid spacing (m): '
         TextInput:
             id: spacing
+            focus: True
+            on_text_validate: root.count(int(self.text))
     Row:
         Button:
             text: 'Count'
@@ -93,9 +98,17 @@
         Button:
             text: root.grains_fn or 'Load'
             on_release: root.show_load_grains()
+    Row:
+        size_hint_y: 1
+        Label:
+            text: 'Pixels per meter'
+        TextInput:
+            text: str(root.px_per_m)
+            background_color: 'red' if root.px_per_m == 1 else 'green'
+            on_text_validate: root.px_per_m = int(self.text)
     Image:
-        size_hint_y: 10
         id: image
+        size_hint_y: 10
     Row:
         size_hint_y: 2
         disabled: root.unet_model is None or type(root.image) is type(None)

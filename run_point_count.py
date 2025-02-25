@@ -4,7 +4,8 @@ import segmenteverygrain.interactions as si
 import shapely
 
 
-FIGURE_DPI = 72
+FIGURE_DPI = 72     # dots/inch
+PX_PER_M = 1        # px/m; be sure not to convert units twice!!
 SPACING = 220       # px
 
 
@@ -14,7 +15,7 @@ image = si.load_image(fn)
 img_y, img_x = image.shape[:2]
 
 # Load grains
-fn = './output/test_grains.csv'
+fn = './output/test_edit_grains.csv'
 grains = si.load_grains(fn)
 
 
@@ -53,15 +54,17 @@ ax.scatter(xs, ys,
 
 
 # Save results
-fn = './output/test_pointcount'
+fn = './output/test_count'
+# Convert units
+pass
 # Grain shapes
 si.save_grains(fn + '_grains.csv', grains)
 # Grain image
 fig.savefig(fn + '_grains.jpg', bbox_inches='tight', pad_inches=0.2)
 # Summary data
-si.save_summary(fn + '_summary.csv', grains)
+si.save_summary(fn + '_summary.csv', grains, px_per_m=PX_PER_M)
 # Summary histogram
-si.save_histogram(fn + '_summary.jpg', grains)
+si.save_histogram(fn + '_summary.jpg', grains, px_per_m=PX_PER_M)
 
 
 # plt.show(block=True)
