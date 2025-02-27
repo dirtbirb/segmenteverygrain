@@ -13,21 +13,22 @@ import shapely
 import skimage
 
 
-# Speed up rendering a little?
-mplstyle.use('fast')
-
-# Attach parent grain reference to the Polygon class
-mpatches.Polygon.grain = None
-
-# Don't reset zoom level when pressing 'c' to create a grain
+# HACK: Don't reset zoom level when pressing 'c' to create a grain
 if 'c' in mpl.rcParams['keymap.back']:
     mpl.rcParams['keymap.back'].remove('c')
+
+# HACK: Attach parent grain reference to the Polygon class
+# Makes it easy to use matplotlib "pick" event when clicking on a grain
+mpatches.Polygon.grain = None
+
+# Speed up rendering a little?
+mplstyle.use('fast')
 
 
 class Grain(object):
     ''' Stores data and plot representation for a single grain. '''
         
-    def __init__(self, xy:np.ndarray, data:pd.Series=None):
+    def __init__(self, xy: np.ndarray, data: pd.Series=None):
         '''
         Parameters
         ----------
@@ -40,7 +41,8 @@ class Grain(object):
         # Input
         self.data = data
         self.xy = np.array(xy)
-        # Grain properties to calculate
+        
+        # Grain properties to calculate (skimage)
         # {name: dimensionality}
         self.region_props = {
             'area': 2,
@@ -53,6 +55,7 @@ class Grain(object):
             'mean_intensity': 0,
             'min_intensity': 0
         }
+        
         # Display
         self.normal_props = {
             'alpha': 0.6
@@ -70,7 +73,7 @@ class Grain(object):
         ''' Return a shapely.Polygon representing the matplotlib patch. '''
         return shapely.Polygon(self.xy.T)
 
-    def measure(self, image:np.ndarray) -> pd.Series:
+    def measure(self, image: np.ndarray) -> pd.Series:
         '''
         Calculate grain information from image and matplotlib patch.
         Overwrites self.data.
@@ -87,6 +90,7 @@ class Grain(object):
             Row for a DataFrame containing computed grain info.
         '''
         # Get rasterized shape
+        # TODO: Just use a patch of the image and then convert coords
         rasterized = rasterio.features.rasterize(
             [self.polygon], out_shape=image.shape[:2])
         # Calculate region properties
@@ -100,7 +104,30 @@ class Grain(object):
             return
         return self.data
 
-    def make_patch(self, ax:mpl.axes.Axes) -> mpatches.Polygon:
+    def draw_axes(self, ax: mpl.axes.Axes) -> dict:
+        # Compute grain data if it hasn't been done already
+        if self.data is None:
+            image = ax.get_images()[0].get_array()
+            self.data = self.measure(image)
+        data = self.data
+        # Keep track of drawn objects
+        artists = {}
+        # Centroid
+        x0, y0 = data['centroid-1'], data['centroid-0']
+        artists['centroid'] = ax.plot(x0, y0, '.k')
+        # Major axis
+        orientation = data['orientation']
+        x = x0 - np.sin(orientation) * 0.5 * data['major_axis_length']
+        y = y0 - np.cos(orientation) * 0.5 * data['major_axis_length']
+        artists['minor'] = ax.plot((x0, x), (y0, y), '-k')
+        # Minor axis
+        x = x0 + np.cos(orientation) * 0.5 * data['minor_axis_length']
+        y = y0 - np.sin(orientation) * 0.5 * data['minor_axis_length']
+        artists['major'] = ax.plot((x0, x), (y0, y), '-k')
+        # Return dict of artist objects, potentially useful for blitting
+        return artists
+
+    def draw_patch(self, ax: mpl.axes.Axes) -> mpatches.Polygon:
         '''
         Draw this grain on the provided matplotlib axes and save the result.
 
@@ -115,7 +142,7 @@ class Grain(object):
             Object representing this grain on the plot.
         '''
                 
-        # Create patch
+        # Create patch (filled polygon)
         (self.patch,) = ax.fill(
             *self.xy,
             edgecolor='black',
@@ -128,26 +155,11 @@ class Grain(object):
         self.patch.grain = self
         # Save assigned color (for select/unselect)
         self.normal_props['facecolor'] = self.patch.get_facecolor()
-        # Compute grain data if not provided
-        image = ax.get_images()[0].get_array()
+        # Compute grain data for the info box
         if self.data is None:
+            image = ax.get_images()[0].get_array()
             self.data = self.measure(image)
         return self.patch
-
-    def draw_axes(self, ax:mpl.axes.Axes):
-        if self.data is None:
-            self.measure(ax.get_images()[0].get_array())
-        data = self.data
-
-        x0, y0 = data['centroid-1'], data['centroid-0']
-        ax.plot(x0, y0, '.k')
-        orientation = data['orientation']
-        x1 = x0 + np.cos(orientation) * 0.5 * data['minor_axis_length']
-        y1 = y0 - np.sin(orientation) * 0.5 * data['minor_axis_length']
-        ax.plot((x0, x1), (y0, y1), '-k')
-        x2 = x0 - np.sin(orientation) * 0.5 * data['major_axis_length']
-        y2 = y0 - np.cos(orientation) * 0.5 * data['major_axis_length']
-        ax.plot((x0, x2), (y0, y2), '-k')
 
     def select(self) -> bool:
         '''
@@ -168,24 +180,30 @@ class GrainPlot(object):
     ''' Interactive plot to create, delete, and merge grains. '''
 
     def __init__(self,
-            grains:list=[],
-            image=None, 
-            predictor=None,
-            blit=True,
-            minspan=10,
-            image_alpha=1,
+            grains: list = [],
+            image: np.ndarray = None, 
+            predictor = None,
+            blit: bool = True,
+            minspan: int = 10,
+            image_alpha: float = 1.,
             **kwargs):
         '''
         Parameters
         ----------
-        grains : list
+        grains: list
             List of grains with xy data to plot over the backround image.
-        image : np.ndarray
+        image: np.ndarray
             Image under analysis, displayed behind identified grains.
         predictor:
             SAM predictor used to create new grains.
-        figsize: tuple
-            Figure size.
+        blit: bool, default True
+            Whether to use blitting (much faster, potentially buggy).
+        minspan: int, default 10
+            Minimum size for box selector tool.
+        image_alpha: float, default 1.0
+            Alpha value for background image, passed to imshow().
+        kwargs: dict
+            Keyword arguments to pass to plt.figure().
         '''
 
         # Input
@@ -195,9 +213,8 @@ class GrainPlot(object):
         self.blit = blit
         self.minspan = minspan
         
-        # Interactions
+        # Events
         self.cids = []
-        self.created_grains = []
         self.events = {
             'button_press_event': self.onclick,
             'draw_event': self.ondraw,
@@ -206,8 +223,11 @@ class GrainPlot(object):
             'pick_event': self.onpick
         }
         self.last_pick = (0, 0)
+        
+        # Interaction history
         self.points = []
         self.point_labels = []
+        self.created_grains = []
         self.selected_grains = []
         
         # Plot
@@ -220,6 +240,7 @@ class GrainPlot(object):
         self.fig.tight_layout(pad=0)
         
         # Interactive toolbar: inject unselect_all before any zoom/pan changes
+        # Avoids manual errors and bugs with blitting
         toolbar = self.canvas.toolbar
         toolbar._update_view = self.unselect_before(toolbar._update_view)
         toolbar.release_pan = self.unselect_before(toolbar.release_pan)
@@ -262,12 +283,12 @@ class GrainPlot(object):
 
         # Draw grains and initialize plot
         for grain in grains:
-            grain.make_patch(self.ax)
+            grain.draw_patch(self.ax)
         if blit:
             self.canvas.draw()
 
     # Display helpers ---
-    def unselect_before(self, f):
+    def unselect_before(self, f: object) -> object:
         ''' Wrap a function to call unselect_all before it. '''
         def newf(*args, **kwargs):
             if self.blit:
@@ -276,7 +297,7 @@ class GrainPlot(object):
         return newf
 
     def update(self):
-        ''' Blit background image and draw animated art'''
+        ''' Blit background image and draw animated art. '''
         # Reset background
         self.canvas.restore_region(self.background)
         # Draw animated artists
@@ -289,27 +310,30 @@ class GrainPlot(object):
         # Push to canvas
         self.canvas.blit(self.ax.bbox)
 
-    def toggle_info(self, show=None):
+    def toggle_info(self, show:bool=None) -> bool:
+        ''' Toggle or set info box display. '''
         # Toggle info box flag
         self.show_info = show or not self.show_info
         # Show info box if requested and grains selected
         self.info.set_visible(self.show_info and len(self.selected_grains))
+        return self.show_info
 
     def update_info(self):
-        # Update based on last selected grain, or hide if none selected
+        ''' Update info box based on last selected grain. '''
+        # Hide info box if no grains selected
         if not len(self.selected_grains):
             self.info.set_visible(False)
             return
         grain = self.selected_grains[-1]
-        # Update offset based on position
+        # Determine offset based on position within plot
         ext = grain.patch.get_extents()
         img_x, img_y = self.canvas.get_width_height()
         x = -0.1 if (ext.x1 + ext.x0) / img_x > 1 else 1.1
         y = -0.1 if (ext.y1 + ext.y0) / img_y > 1 else 1.1
-        # Scoot annotation a little more for small grains
+        # Extra offset to avoid covering up small grains
         if abs(ext.y1 - ext.y0) < img_y / 20:
             if y <= 0:
-                y -= 1.4 
+                y -= 1.4
             else:
                 y += 1.4
         self.info.xy = (x, y)
@@ -326,20 +350,21 @@ class GrainPlot(object):
 
     # Selection helpers ---
     def activate_box(self, activate=True):
+        ''' Turn on selection box. '''
         box = self.box_selector
         alpha = 0.4 if activate else 0.2
         box.set_props(alpha=alpha)
         box.set_handle_props(alpha=alpha, visible=activate)
         box.set_active(activate)
     
-    def set_point(self, xy:tuple, is_inside:bool=True):
-        ''' Set point prompt. '''
-        color = 'lime' if is_inside else 'red'
+    def set_point(self, xy:tuple, foreground:bool=True):
+        ''' Set point prompt, either foreground or background. '''
+        color = 'lime' if foreground else 'red'
         new_point = mpatches.Circle(
             xy, radius=5, color=color, animated=self.blit)
         self.ax.add_patch(new_point)
         self.points.append(new_point)
-        self.point_labels.append(is_inside)
+        self.point_labels.append(foreground)
 
     def clear_points(self):
         ''' Clear all prompt points. '''
@@ -355,7 +380,7 @@ class GrainPlot(object):
         self.selected_grains = []
 
     def unselect_all(self):
-        ''' Clear box and point prompts and unselect all grains. '''
+        ''' Clear prompts, unselect all grains, and hide the info box. '''
         self.box_selector.clear()
         self.clear_points()
         self.unselect_grains()
@@ -363,7 +388,7 @@ class GrainPlot(object):
 
     # Manage grains ---
     def create_grain(self):
-        ''' Attempt to find and add grain at most recent clicked position. '''
+        ''' Attempt to detect a grain based on given prompts. '''
         # Interpret point prompts
         if len(self.points):
             points = [p.get_center() for p in self.points]
@@ -389,7 +414,7 @@ class GrainPlot(object):
         )
         # Record new grain (plot, data, and undo list)
         grain = Grain(coords)
-        grain.make_patch(self.ax)
+        grain.draw_patch(self.ax)
         self.grains.append(grain)
         self.created_grains.append(grain)
         # Clear prompts
@@ -428,10 +453,10 @@ class GrainPlot(object):
             return
         # Make new merged grain
         new_grain = Grain(poly.exterior.xy)
-        new_grain.make_patch(self.ax)
+        new_grain.draw_patch(self.ax)
         self.grains.append(new_grain)
         self.created_grains.append(new_grain)
-        # Delete old constituent grains
+        # Delete old constituent grains (since they are still selected)
         self.delete_grains()
 
     def undo_grain(self):
@@ -454,7 +479,6 @@ class GrainPlot(object):
         event
             Matplotlib mouseevent (different than normal event!)
         '''
-        # Must be in axis
         # No double-clicks
         # Not during box selection (shift is pressed)
         # Not during toolbar interactions (pan/zoom)
@@ -514,6 +538,7 @@ class GrainPlot(object):
             self.unselect_grains()
             self.activate_box()
         else:
+            # Don't update canvas if no key pressed
             return
         # Update canvas
         if self.blit:
@@ -523,12 +548,13 @@ class GrainPlot(object):
             self.canvas.draw_idle()
 
     def onkeyup(self, event:mpl.backend_bases.KeyEvent):
-        # Cancel box selector if too small
         if event.key == 'shift':
+            # Deactivate box selector
             self.activate_box(False)
+            # Cancel box if too small (based on minspan)
             xmin, xmax, ymin, ymax = self.box_selector.extents
-            area = abs(xmax-xmin) * abs(ymax-ymin)
-            if area < self.minspan ** 2:
+            span = min(abs(xmax-xmin), abs(ymax-ymin))
+            if span < self.minspan:
                 self.box_selector.clear()
 
     def onpick(self, event:mpl.backend_bases.PickEvent):
@@ -547,9 +573,9 @@ class GrainPlot(object):
                 or mouseevent.button == 2
                 or self.box_selector.get_active()):
             return
-        # Block any point prompts that would be on a grain
+        # Save click location to block attempts to set a point prompt
         self.last_pick = (round(mouseevent.xdata), round(mouseevent.ydata))
-        # Only pick on left-click when no point prompts exist
+        # Only pick on left-click and when no point prompts exist
         if mouseevent.button != 1 or len(self.points) > 0:
             return
         # Add/remove selected grain to/from selection list
@@ -589,15 +615,18 @@ class GrainPlot(object):
         return pd.concat([g.data for g in self.grains], axis=1).T
 
     def savefig(self, fn):
+        ''' Save figure to disk. '''
         self.fig.savefig(fn, bbox_inches='tight', pad_inches=0)
 
 
 # Load/save ---
-def load_image(fn):
+def load_image(fn: str) -> np.ndarray:
+    ''' Load an image as a numpy array. '''
     return np.array(keras.utils.load_img(fn))
 
 
-def load_grains(fn):
+def load_grains(fn: str) -> list:
+    ''' Load grain boundaries from a csv. '''
     grains = []
     for grain in pd.read_csv(fn).iterrows():
         out_coords = []
@@ -609,11 +638,13 @@ def load_grains(fn):
     return grains
 
 
-def save_grains(fn, grains):
+def save_grains(fn: str, grains: list):
+    ''' Save grain boundaries to a csv. '''
     pd.DataFrame([g.polygon for g in grains]).to_csv(fn)
 
 
-def get_summary(grains, px_per_m=1):
+def get_summary(grains: list, px_per_m: float=1.) -> pd.DataFrame:
+    ''' Get grain measurements as a pandas DataFrame. '''
     # Get DataFrame
     df = pd.concat([g.data for g in grains], axis=1).T
     # Convert units
@@ -625,24 +656,28 @@ def get_summary(grains, px_per_m=1):
     return df
 
 
-def save_summary(fn, grains, px_per_m=1):
+def save_summary(fn: str, grains: list, px_per_m: float=1.):
+    ''' Save grain measurements as a csv. '''
     get_summary(grains, px_per_m).to_csv(fn)
 
 
-def get_histogram(grains, px_per_m=1):
+def get_histogram(grains: list, px_per_m: float=1.):
+    ''' Get a histogram of axis lengths as a matplotlib plot. '''
     df = get_summary(grains, px_per_m)
     fig, ax = segmenteverygrain.plot_histogram_of_axis_lengths(
         df['major_axis_length'], df['minor_axis_length'])
     return fig, ax
     
 
-def save_histogram(fn, grains, px_per_m=1):
+def save_histogram(fn: str, grains: list, px_per_m: float=1.):
+    ''' Save a histogram of axis lengths as an image. '''
     fig, ax = get_histogram(grains, px_per_m)
     fig.savefig(fn, bbox_inches='tight', pad_inches=0)
     plt.close(fig)
 
 
-def get_mask(grains, image):
+def get_mask(grains: list, image: np.ndarray) -> np.ndarray:
+    ''' Get a rasterized, binary mask of grain shapes as np.ndarray. '''
     grains = [g.polygon for g in grains]
     rasterized_image, mask = segmenteverygrain.create_labeled_image(
         grains, image)
@@ -650,12 +685,14 @@ def get_mask(grains, image):
     return mask
 
 
-def save_mask(fn, grains, image, scale=False):
+def save_mask(fn: str, grains: list, image: np.ndarray, scale: bool=False):
+    ''' Save binary mask of grain shapes, optionally scaled to 0-255. '''
     keras.utils.save_img(fn, get_mask(grains, image), scale=scale)
 
 
 # Point count ---
-def make_grid(image:np.ndarray, spacing:int):
+def make_grid(image: np.ndarray, spacing: int):
+    ''' Construct a grid of measurement points given an image and spacing. '''
     img_y, img_x = image.shape[:2]
     pad_x = img_x % spacing
     pad_y = img_y % spacing
@@ -666,16 +703,21 @@ def make_grid(image:np.ndarray, spacing:int):
     return points, xs, ys
 
 
-def filter_grains_by_points(grains:list, points:list) -> tuple:
+def filter_grains_by_points(grains: list, points: list) -> tuple:
+    ''' Return a list of grains at specified points. '''
     point_found = []
     point_grains = []
     for point in points:
         for grain in grains.copy():
             if grain.polygon.contains(point):
+                # Remove grain from list so that it's not found twice
                 grains.remove(grain)
+                # Save detected grain
                 point_grains.append(grain)
+                # Record that a grain was found at this point
                 point_found.append(True)
                 break
         else:
+            # Record that no grain was found at this point
             point_found.append(False)
     return point_grains, point_found
