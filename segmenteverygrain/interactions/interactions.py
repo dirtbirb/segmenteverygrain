@@ -14,6 +14,9 @@ import skimage
 from tqdm import tqdm
 
 
+# Init logger
+logger = logging.getLogger(__name__)
+
 # Images larger than this will be downscaled
 # 4k resolution is (2160, 4096)
 MAX_IMAGE_SIZE = np.asarray((2160, 4096))
@@ -33,8 +36,6 @@ mpatches.Polygon.grain = None
 
 # Speed up rendering a little?
 mplstyle.use('fast')
-
-logger = logging.getLogger(__name__)
 
 
 class Grain(object):
@@ -111,7 +112,7 @@ class Grain(object):
         if len(data):
             self.data = data.iloc[0]
         else:
-            print('MEASURE_ERROR ', pd.DataFrame(data))
+            logger.error(f'MEASURE ERROR {pd.DataFrame(data)}')
             self.data = pd.Series()
             return
         return self.data
@@ -263,10 +264,11 @@ class GrainPlot(object):
             # Downscale image to MAX_IMAGE_SIZE if needed
             if (image.shape[0] > MAX_IMAGE_SIZE[0] 
                     or image.shape[1] > MAX_IMAGE_SIZE[1]):
+                logger.info('Downscaling large image for display...')
                 self.scale = np.max(MAX_IMAGE_SIZE / image.shape[:2])
                 self.display_image = skimage.transform.rescale(
                     image, self.scale, anti_aliasing=True, channel_axis=2)
-                logger.info(f'Downscaled image by factor {self.scale}.')
+                logger.info(f'Downscaled image to {self.scale} of original.')
             # Show image if provided
             self.ax.imshow(self.display_image, alpha=image_alpha)
             self.ax.autoscale(enable=False)
@@ -315,11 +317,10 @@ class GrainPlot(object):
         self.show_info = True
 
         # Draw grains and initialize plot
-        if self.scale != 1.:
-            logger.info(f'Rescaling grains.')
-            for grain in tqdm(self.grains):
-                grain.rescale(self.scale)
         logger.info('Drawing grains.')
+        if self.scale != 1.:
+            for grain in self.grains:
+                grain.rescale(self.scale)
         for grain in tqdm(self.grains):
             grain.draw_patch(self.ax)
         if blit:
@@ -430,14 +431,14 @@ class GrainPlot(object):
         ''' Attempt to detect a grain based on given prompts. '''
         # Interpret point prompts
         if len(self.points):
-            points = [p.get_center() for p in self.points]
+            points = [p.get_center() / self.scale for p in self.points]
             point_labels = self.point_labels
         else:
             points = None
             point_labels = None
         # Interpret box prompt
         if self.box_selector._selection_completed:
-            xmin, xmax, ymin, ymax = self.box_selector.extents
+            xmin, xmax, ymin, ymax = self.box_selector.extents / self.scale
             box = [xmin, ymin, xmax, ymax]
         else:
             # Return if we haven't provided any prompts
@@ -453,6 +454,7 @@ class GrainPlot(object):
         )
         # Record new grain (plot, data, and undo list)
         grain = Grain(coords)
+        grain.rescale(self.scale)
         grain.draw_patch(self.ax)
         self.grains.append(grain)
         self.created_grains.append(grain)
@@ -646,31 +648,12 @@ class GrainPlot(object):
     # Output ---
     def get_grains(self):
         ''' Return list of grains in full image coordinates. '''
-        if self.scale != 1:
-            grains = self.grains.copy()
+        grains = self.grains.copy()
+        if self.scale != 1.:
             for g in grains:
                 g.rescale(1/self.scale)
                 g.measure(self.image)
         return grains
-
-    def get_mask(self) -> list:
-        ''' Return labeled image for Unet training. '''
-        all_grains = [g.polygon for g in self.grains]
-        return segmenteverygrain.create_labeled_image(all_grains, self.image)
-
-    def get_summary(self, px_per_m: float=1.) -> pd.DataFrame:
-        ''' Return grain measurements using full image. '''
-        # Get copy of self.grains in full-image coordinates
-        grains = self.get_grains()
-        # Get DataFrame
-        df = pd.concat([g.data for g in grains], axis=1).T
-        # Convert units
-        # HACK: Applies first grain's region_props to all
-        for k, d in grains[0].region_props.items():
-            if d:
-                for col in [c for c in df.columns if k in c]:
-                    df[col] /= px_per_m ** d 
-        return df
 
     def savefig(self, fn: str):
         ''' Save figure to disk. '''
