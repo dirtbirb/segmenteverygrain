@@ -43,6 +43,7 @@ ax.autoscale(enable=False)
 
 # Plot axes
 for grain in grains:
+    grain.rescale(1 / plot.scale)
     grain.draw_axes(ax)
 
 # Plot count grid
