@@ -2,6 +2,10 @@ import matplotlib.pyplot as plt
 import segment_anything
 import segmenteverygrain.interactions as si
 
+import logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 FIGSIZE = (12, 8)   # in
 PX_PER_M = 1        # px/m; be sure not to convert units twice!
@@ -9,6 +13,7 @@ PX_PER_M = 1        # px/m; be sure not to convert units twice!
 
 # Load test image
 fn = 'torrey_pines_beach_image.jpeg'
+# fn = 'input/Waimea_2m_611-617_largestjpng.png'
 image = si.load_image(fn)
 
 # Load SAM
@@ -18,7 +23,8 @@ predictor = segment_anything.SamPredictor(sam)
 predictor.set_image(image)
 
 # Load grains
-fn = './output/test_auto_grains.csv'
+fn = './output/test_edit_grains.csv'
+# fn = 'input/Waimea_2m_611-617_largestjpng_grains.csv'
 grains = si.load_grains(fn)
 # grains = []
 
@@ -29,7 +35,7 @@ plot = si.GrainPlot(
     image=image, 
     predictor=predictor,
     blit=True,
-    figsize=FIGSIZE
+    # figsize=FIGSIZE
 )
 plot.activate()
 plt.show(block=True)
@@ -43,13 +49,14 @@ pass
 # Grain shapes
 # for g in grains:
 #     g.measure(image=image)
-si.save_grains(fn + '_grains.csv', plot.grains)
+grains = plot.get_grains()
+si.save_grains(fn + '_grains.csv', grains)
 # Grain image
 plot.savefig(fn + '_grains.jpg')
 # Summary data
-si.save_summary(fn + '_summary.csv', plot.grains, px_per_m=PX_PER_M)
+si.save_summary(fn + '_summary.csv', grains, px_per_m=PX_PER_M)
 # Summary histogram
-si.save_histogram(fn + '_summary.jpg', plot.grains, px_per_m=PX_PER_M)
+si.save_histogram(fn + '_summary.jpg', grains, px_per_m=PX_PER_M)
 # Training mask
-si.save_mask(fn + '_mask.png', plot.grains, image, scale=False)
-si.save_mask(fn + '_mask.jpg', plot.grains, image, scale=True)
+si.save_mask(fn + '_mask.png', grains, image, scale=False)
+si.save_mask(fn + '_mask.jpg', grains, image, scale=True)
