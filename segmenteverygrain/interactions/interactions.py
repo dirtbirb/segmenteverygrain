@@ -1,4 +1,3 @@
-import functools
 import keras.utils
 import logging
 import matplotlib as mpl
@@ -13,6 +12,16 @@ import segmenteverygrain
 import shapely
 import skimage
 from tqdm import tqdm
+
+
+# Images larger than this will be downscaled
+# 4k resolution is (2160, 4096)
+MAX_IMAGE_SIZE = np.asarray((2160, 4096))
+# MAX_IMAGE_SIZE = np.asarray((240, 320))
+
+# HACK: Bypass large image restriction
+from PIL import Image
+Image.MAX_IMAGE_PIXELS = None 
 
 # HACK: Don't reset zoom level when pressing 'c' to create a grain
 if 'c' in mpl.rcParams['keymap.back']:
@@ -71,7 +80,7 @@ class Grain(object):
         self.patch = None
         self.selected = False
 
-    @functools.cached_property
+    @property
     def polygon(self) -> shapely.Polygon:
         ''' Return a shapely.Polygon representing the matplotlib patch. '''
         return shapely.Polygon(self.xy.T)
@@ -178,6 +187,14 @@ class Grain(object):
             self.selected_props if self.selected else self.normal_props)
         return self.selected
 
+    def rescale(self, scale: float):
+        '''
+        Scale exterior polygon coordinates with given scale factor.
+        Invalidates self.data. Call self.measure() to update it.
+        '''
+        self.data = None
+        self.xy *= scale
+
 
 class GrainPlot(object):
     ''' Interactive plot to create, delete, and merge grains. '''
@@ -238,8 +255,20 @@ class GrainPlot(object):
         self.fig = plt.figure(**kwargs)
         self.canvas = self.fig.canvas
         self.ax = self.fig.add_subplot(aspect='equal', xticks=[], yticks=[])
+        
+        # Background image
+        self.scale = 1.
+        self.display_image = image
         if isinstance(image, np.ndarray):
-            self.ax.imshow(image, alpha=image_alpha)
+            # Downscale image to MAX_IMAGE_SIZE if needed
+            if (image.shape[0] > MAX_IMAGE_SIZE[0] 
+                    or image.shape[1] > MAX_IMAGE_SIZE[1]):
+                self.scale = np.max(MAX_IMAGE_SIZE / image.shape[:2])
+                self.display_image = skimage.transform.rescale(
+                    image, self.scale, anti_aliasing=True, channel_axis=2)
+                logger.info(f'Downscaled image by factor {self.scale}.')
+            # Show image if provided
+            self.ax.imshow(self.display_image, alpha=image_alpha)
             self.ax.autoscale(enable=False)
         self.fig.tight_layout(pad=0)
         
@@ -286,6 +315,10 @@ class GrainPlot(object):
         self.show_info = True
 
         # Draw grains and initialize plot
+        if self.scale != 1.:
+            logger.info(f'Rescaling grains.')
+            for grain in tqdm(self.grains):
+                grain.rescale(self.scale)
         logger.info('Drawing grains.')
         for grain in tqdm(self.grains):
             grain.draw_patch(self.ax)
@@ -611,16 +644,35 @@ class GrainPlot(object):
         self.cids = []
     
     # Output ---
+    def get_grains(self):
+        ''' Return list of grains in full image coordinates. '''
+        if self.scale != 1:
+            grains = self.grains.copy()
+            for g in grains:
+                g.rescale(1/self.scale)
+                g.measure(self.image)
+        return grains
+
     def get_mask(self) -> list:
         ''' Return labeled image for Unet training. '''
         all_grains = [g.polygon for g in self.grains]
         return segmenteverygrain.create_labeled_image(all_grains, self.image)
 
-    def get_data(self) -> pd.DataFrame:
-        ''' Return up-to-date DataFrame of grain stats. '''
-        return pd.concat([g.data for g in self.grains], axis=1).T
+    def get_summary(self, px_per_m: float=1.) -> pd.DataFrame:
+        ''' Return grain measurements using full image. '''
+        # Get copy of self.grains in full-image coordinates
+        grains = self.get_grains()
+        # Get DataFrame
+        df = pd.concat([g.data for g in grains], axis=1).T
+        # Convert units
+        # HACK: Applies first grain's region_props to all
+        for k, d in grains[0].region_props.items():
+            if d:
+                for col in [c for c in df.columns if k in c]:
+                    df[col] /= px_per_m ** d 
+        return df
 
-    def savefig(self, fn):
+    def savefig(self, fn: str):
         ''' Save figure to disk. '''
         self.fig.savefig(fn, bbox_inches='tight', pad_inches=0)
 
