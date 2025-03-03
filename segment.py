@@ -4,7 +4,6 @@ import numpy as np
 import os.path
 import segment_anything
 import segmenteverygrain
-import segmenteverygrain.interactions as si
 
 import kivy
 kivy.require('2.3.1')
@@ -16,16 +15,14 @@ from kivy.uix.popup import Popup
 from kivy_garden.matplotlib.backend_kivyagg import FigureCanvasKivyAgg
 
 
-# HACK: Bypass large image restriction
-from PIL import Image
-Image.MAX_IMAGE_PIXELS = None 
-
 # HACK: Turn off crazy debug output
 import logging
 for logger in [logging.getLogger(name) for name in logging.root.manager.loggerDict]:
     if logger.level == 0:
         logger.setLevel(30)
 
+# HACK: Late import to avoid silencing the logger
+import segmenteverygrain.interactions as si
 
 FIGURE_DPI = 72
 # FIGSIZE = (img_x/FIGURE_DPI, img_y/FIGURE_DPI)
@@ -162,6 +159,7 @@ class RootLayout(BoxLayout):
         plot.deactivate()
 
         # Process results
+        self.grains = plot.grains
         self.grains_fig = plot.fig
 
         # Update GUI and show save dialog
@@ -176,13 +174,10 @@ class RootLayout(BoxLayout):
         spacing *= self.px_per_m
         Logger.info(f'Spacing: {spacing} pixels')
 
-        # Find and measure grains at grid locations
+        # Find grains at grid locations
         Logger.info('Performing count')
         points, xs, ys = si.make_grid(self.image, spacing)
         grains, points_found = si.filter_grains_by_points(self.grains, points)
-        for g in grains:
-            if g.data is None:
-                g.measure(self.image)
         
         # Make GrainPlot and save it as a static image
         Logger.info('Plotting results')
@@ -203,6 +198,7 @@ class RootLayout(BoxLayout):
 
         # Plot axes
         for grain in grains:
+            grain.rescale(1 / plot.scale)
             grain.draw_axes(ax)
 
         # Plot grid
