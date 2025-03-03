@@ -80,9 +80,9 @@ class Grain(object):
 
         Parameters
         ----------
-        ax : matplotlib.Axes
-            Axes instance to get the background image from.
-            Used to calculate intensity in self.data.
+        image : np.ndarray
+            Background image.
+            Used to calculate region intensity in self.data.
 
         Returns
         -------
@@ -104,7 +104,7 @@ class Grain(object):
             return
         return self.data
 
-    def draw_axes(self, ax: mpl.axes.Axes) -> dict:
+    def draw_axes(self, ax: mpl.axes.Axes) -> dict[str: object]:
         # Compute grain data if it hasn't been done already
         if self.data is None:
             image = ax.get_images()[0].get_array()
@@ -119,11 +119,11 @@ class Grain(object):
         orientation = data['orientation']
         x = x0 - np.sin(orientation) * 0.5 * data['major_axis_length']
         y = y0 - np.cos(orientation) * 0.5 * data['major_axis_length']
-        artists['minor'] = ax.plot((x0, x), (y0, y), '-k')
+        artists['major'] = ax.plot((x0, x), (y0, y), '-k')
         # Minor axis
         x = x0 + np.cos(orientation) * 0.5 * data['minor_axis_length']
         y = y0 - np.sin(orientation) * 0.5 * data['minor_axis_length']
-        artists['major'] = ax.plot((x0, x), (y0, y), '-k')
+        artists['minor'] = ax.plot((x0, x), (y0, y), '-k')
         # Return dict of artist objects, potentially useful for blitting
         return artists
 
@@ -212,7 +212,7 @@ class GrainPlot(object):
         self.predictor = predictor
         self.blit = blit
         self.minspan = minspan
-        
+
         # Events
         self.cids = []
         self.events = {
@@ -661,7 +661,7 @@ def save_summary(fn: str, grains: list, px_per_m: float=1.):
     get_summary(grains, px_per_m).to_csv(fn)
 
 
-def get_histogram(grains: list, px_per_m: float=1.):
+def get_histogram(grains: list, px_per_m: float=1.) -> tuple[object, object]:
     ''' Get a histogram of axis lengths as a matplotlib plot. '''
     df = get_summary(grains, px_per_m)
     fig, ax = segmenteverygrain.plot_histogram_of_axis_lengths(
@@ -691,7 +691,7 @@ def save_mask(fn: str, grains: list, image: np.ndarray, scale: bool=False):
 
 
 # Point count ---
-def make_grid(image: np.ndarray, spacing: int):
+def make_grid(image: np.ndarray, spacing: int) -> tuple[list, list, list]:
     ''' Construct a grid of measurement points given an image and spacing. '''
     img_y, img_x = image.shape[:2]
     pad_x = img_x % spacing
@@ -703,7 +703,7 @@ def make_grid(image: np.ndarray, spacing: int):
     return points, xs, ys
 
 
-def filter_grains_by_points(grains: list, points: list) -> tuple:
+def filter_grains_by_points(grains: list, points: list) -> tuple[list, list]:
     ''' Return a list of grains at specified points. '''
     point_found = []
     point_grains = []
