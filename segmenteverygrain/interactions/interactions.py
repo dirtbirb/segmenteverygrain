@@ -14,17 +14,9 @@ import skimage
 from tqdm import tqdm
 
 
-# Init logger
-logger = logging.getLogger(__name__)
-
-# Images larger than this will be downscaled
-# 4k resolution is (2160, 4096)
-MAX_IMAGE_SIZE = np.asarray((2160, 4096))
-# MAX_IMAGE_SIZE = np.asarray((240, 320))
-
 # HACK: Bypass large image restriction
 from PIL import Image
-Image.MAX_IMAGE_PIXELS = None 
+Image.MAX_IMAGE_PIXELS = None
 
 # HACK: Don't reset zoom level when pressing 'c' to create a grain
 if 'c' in mpl.rcParams['keymap.back']:
@@ -36,6 +28,13 @@ mpatches.Polygon.grain = None
 
 # Speed up rendering a little?
 mplstyle.use('fast')
+
+# Init logger
+logger = logging.getLogger(__name__)
+
+# Images larger than this will be downscaled
+# 4k resolution is (2160, 4096)
+IMAGE_MAX_SIZE = np.asarray((2160, 4096))
 
 
 class Grain(object):
@@ -207,6 +206,7 @@ class GrainPlot(object):
             blit: bool = True,
             minspan: int = 10,
             image_alpha: float = 1.,
+            image_max_size: tuple = IMAGE_MAX_SIZE,
             **kwargs):
         '''
         Parameters
@@ -223,13 +223,15 @@ class GrainPlot(object):
             Minimum size for box selector tool.
         image_alpha: float, default 1.0
             Alpha value for background image, passed to imshow().
+        image_max_size: (y, x)
+            Images larger than this will be downscaled for display.
+            Grain creation and measurement will still use the full image.
         kwargs: dict
             Keyword arguments to pass to plt.figure().
         '''
         logger.info('Creating GrainPlot...')
 
         # Input
-        self.grains = grains
         self.image = image
         self.predictor = predictor
         self.blit = blit
@@ -261,15 +263,20 @@ class GrainPlot(object):
         self.scale = 1.
         self.display_image = image
         if isinstance(image, np.ndarray):
-            # Downscale image to MAX_IMAGE_SIZE if needed
-            if (image.shape[0] > MAX_IMAGE_SIZE[0] 
-                    or image.shape[1] > MAX_IMAGE_SIZE[1]):
+            # Use default max image size if none provided
+            if type(image_max_size) is type(None):
+                max_size = IMAGE_MAX_SIZE
+            else:
+                max_size = np.asarray(image_max_size)
+            # Downscale image if needed
+            if (image.shape[0] > max_size[0] 
+                    or image.shape[1] > max_size[1]):
                 logger.info('Downscaling large image for display...')
-                self.scale = np.max(MAX_IMAGE_SIZE / image.shape[:2])
+                self.scale = np.max(max_size / image.shape[:2])
                 self.display_image = skimage.transform.rescale(
                     image, self.scale, anti_aliasing=True, channel_axis=2)
                 logger.info(f'Downscaled image to {self.scale} of original.')
-            # Show image if provided
+            # Show image
             self.ax.imshow(self.display_image, alpha=image_alpha)
             self.ax.autoscale(enable=False)
         self.fig.tight_layout(pad=0)
@@ -318,10 +325,8 @@ class GrainPlot(object):
 
         # Draw grains and initialize plot
         logger.info('Drawing grains.')
-        if self.scale != 1.:
-            for grain in self.grains:
-                grain.rescale(self.scale)
-        for grain in tqdm(self.grains):
+        self.grains = grains
+        for grain in tqdm(self._grains):
             grain.draw_patch(self.ax)
         if blit:
             self.canvas.draw()
@@ -427,19 +432,39 @@ class GrainPlot(object):
         self.toggle_info(False)
 
     # Manage grains ---
+    @property
+    def grains(self) -> list:
+        ''' Return copy of self.grains in full-image coordinates. '''
+        grains = self._grains.copy()
+        if self.scale != 1.:
+            for g in grains:
+                g.rescale(1 / self.scale)
+                g.measure(self.image)
+        return grains
+
+    @grains.setter
+    def grains(self, grains: list):
+        ''' Save copy of given grains list in display-image coordinates. '''
+        grains = grains.copy()
+        if self.scale != 1:
+            for grain in grains:
+                grain.rescale(self.scale)
+        self._grains = grains
+
     def create_grain(self):
         ''' Attempt to detect a grain based on given prompts. '''
         # Interpret point prompts
         if len(self.points):
-            points = [p.get_center() / self.scale for p in self.points]
+            points = [
+                np.asarray(p.get_center()) / self.scale for p in self.points]
             point_labels = self.point_labels
         else:
             points = None
             point_labels = None
         # Interpret box prompt
         if self.box_selector._selection_completed:
-            xmin, xmax, ymin, ymax = self.box_selector.extents / self.scale
-            box = [xmin, ymin, xmax, ymax]
+            xmin, xmax, ymin, ymax = np.asarray(self.box_selector.extents) / self.scale
+            box = np.asarray((xmin, ymin, xmax, ymax))
         else:
             # Return if we haven't provided any prompts
             if points is None:
@@ -456,7 +481,7 @@ class GrainPlot(object):
         grain = Grain(coords)
         grain.rescale(self.scale)
         grain.draw_patch(self.ax)
-        self.grains.append(grain)
+        self._grains.append(grain)
         self.created_grains.append(grain)
         # Clear prompts
         self.unselect_all()
@@ -472,7 +497,7 @@ class GrainPlot(object):
         # Remove selected grains from plot, data, and undo list
         for grain in self.selected_grains:
             grain.patch.remove()
-            self.grains.remove(grain)
+            self._grains.remove(grain)
             if grain in self.created_grains:
                 self.created_grains.remove(grain)
         self.unselect_all()
@@ -495,7 +520,7 @@ class GrainPlot(object):
         # Make new merged grain
         new_grain = Grain(poly.exterior.xy)
         new_grain.draw_patch(self.ax)
-        self.grains.append(new_grain)
+        self._grains.append(new_grain)
         self.created_grains.append(new_grain)
         # Delete old constituent grains (since they are still selected)
         self.delete_grains()
@@ -646,15 +671,6 @@ class GrainPlot(object):
         self.cids = []
     
     # Output ---
-    def get_grains(self):
-        ''' Return list of grains in full image coordinates. '''
-        grains = self.grains.copy()
-        if self.scale != 1.:
-            for g in grains:
-                g.rescale(1/self.scale)
-                g.measure(self.image)
-        return grains
-
     def savefig(self, fn: str):
         ''' Save figure to disk. '''
         self.fig.savefig(fn, bbox_inches='tight', pad_inches=0)
