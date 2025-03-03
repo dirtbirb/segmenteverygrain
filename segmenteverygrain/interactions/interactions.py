@@ -1,5 +1,6 @@
 import functools
 import keras.utils
+import logging
 import matplotlib as mpl
 import matplotlib.style as mplstyle
 import matplotlib.patches as mpatches
@@ -11,7 +12,7 @@ import rasterio.features
 import segmenteverygrain
 import shapely
 import skimage
-
+from tqdm import tqdm
 
 # HACK: Don't reset zoom level when pressing 'c' to create a grain
 if 'c' in mpl.rcParams['keymap.back']:
@@ -23,6 +24,8 @@ mpatches.Polygon.grain = None
 
 # Speed up rendering a little?
 mplstyle.use('fast')
+
+logger = logging.getLogger(__name__)
 
 
 class Grain(object):
@@ -205,6 +208,7 @@ class GrainPlot(object):
         kwargs: dict
             Keyword arguments to pass to plt.figure().
         '''
+        logger.info('Creating GrainPlot...')
 
         # Input
         self.grains = grains
@@ -282,10 +286,12 @@ class GrainPlot(object):
         self.show_info = True
 
         # Draw grains and initialize plot
-        for grain in grains:
+        logger.info('Drawing grains.')
+        for grain in tqdm(self.grains):
             grain.draw_patch(self.ax)
         if blit:
             self.canvas.draw()
+        logger.info('GrainPlot created!')
 
     # Display helpers ---
     def unselect_before(self, f: object) -> object:
