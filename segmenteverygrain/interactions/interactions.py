@@ -189,11 +189,20 @@ class Grain(object):
 
     def rescale(self, scale: float):
         '''
-        Scale exterior polygon coordinates with given scale factor.
-        Invalidates self.data. Call self.measure() to update it.
+        Scale polygon coordinates and measurements by given scale factor.
         '''
-        self.data = None
+        # Convert coordinates
         self.xy *= scale
+        # Convert data
+        if type(self.data) is type(None):
+            return
+        # For each type of measured value,
+        for k, d in self.region_props.items():
+            # If it has any length dimensions associated with it
+            if d:
+                # Scale those values according to their length dimensions
+                for col in [c for c in self.data.keys() if k in c]:
+                    self.data[col] *= scale ** d 
 
 
 class GrainPlot(object):
@@ -439,7 +448,6 @@ class GrainPlot(object):
         if self.scale != 1.:
             for g in grains:
                 g.rescale(1 / self.scale)
-                g.measure(self.image)
         return grains
 
     @grains.setter
