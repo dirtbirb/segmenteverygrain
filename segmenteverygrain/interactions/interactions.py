@@ -18,11 +18,11 @@ from tqdm import tqdm
 # 4k resolution is (2160, 4096)
 IMAGE_MAX_SIZE = np.asarray((2160, 4096))
 
-# Speed up rendering a little?
-mplstyle.use('fast')
-
 # Init logger
 logger = logging.getLogger(__name__)
+
+# Speed up rendering a little?
+mplstyle.use('fast')
 
 # HACK: Bypass large image restriction
 from PIL import Image
@@ -378,8 +378,8 @@ class GrainPlot(object):
         if not len(self.selected_grains):
             self.info.set_visible(False)
             return
-        grain = self.selected_grains[-1]
         # Determine offset based on position within plot
+        grain = self.selected_grains[-1]
         ext = grain.patch.get_extents()
         img_x, img_y = self.canvas.get_width_height()
         x = -0.1 if (ext.x1 + ext.x0) / img_x > 1 else 1.1
@@ -390,8 +390,8 @@ class GrainPlot(object):
                 y -= 1.4
             else:
                 y += 1.4
-        self.info.xy = (x, y)
         # Update position
+        self.info.xy = (x, y)
         self.info.xycoords = grain.patch
         # Update text
         text = (f"Major: {grain.data['major_axis_length']:.0f}px\n"
@@ -667,8 +667,7 @@ class GrainPlot(object):
             self.activate_box(False)
             # Cancel box if too small (based on minspan)
             xmin, xmax, ymin, ymax = self.box_selector.extents
-            span = min(abs(xmax-xmin), abs(ymax-ymin))
-            if span < self.minspan:
+            if min(abs(xmax-xmin), abs(ymax-ymin)) < self.minspan:
                 self.box_selector.clear()
         else:
             return
