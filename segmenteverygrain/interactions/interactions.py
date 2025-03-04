@@ -255,9 +255,10 @@ class GrainPlot(object):
             'key_release_event': self.onkeyup,
             'pick_event': self.onpick
         }
-        self.last_pick = (0, 0)
         
         # Interaction history
+        self.ctrl_down = False
+        self.last_pick = (0, 0)
         self.points = []
         self.point_labels = []
         self.created_grains = []
@@ -272,14 +273,9 @@ class GrainPlot(object):
         self.scale = 1.
         self.display_image = image
         if isinstance(image, np.ndarray):
-            # Use default max image size if none provided
-            if type(image_max_size) is type(None):
-                max_size = IMAGE_MAX_SIZE
-            else:
-                max_size = np.asarray(image_max_size)
             # Downscale image if needed
-            if (image.shape[0] > max_size[0] 
-                    or image.shape[1] > max_size[1]):
+            max_size = np.asarray(image_max_size)
+            if image.shape[0] > max_size[0] or image.shape[1] > max_size[1]:
                 logger.info('Downscaling large image for display...')
                 self.scale = np.max(max_size / image.shape[:2])
                 self.display_image = skimage.transform.rescale(
@@ -364,7 +360,7 @@ class GrainPlot(object):
         # Push to canvas
         self.canvas.blit(self.ax.bbox)
 
-    def toggle_info(self, show:bool=None) -> bool:
+    def toggle_info(self, show: bool=None) -> bool:
         ''' Toggle or set info box display. '''
         # Toggle info box flag
         self.show_info = show or not self.show_info
@@ -405,12 +401,13 @@ class GrainPlot(object):
     # Selection helpers ---
     def activate_box(self, activate=True):
         ''' Turn on selection box. '''
+        self.unselect_grains()
         box = self.box_selector
         alpha = 0.4 if activate else 0.2
         box.set_props(alpha=alpha)
         box.set_handle_props(alpha=alpha, visible=activate)
         box.set_active(activate)
-    
+
     def set_point(self, xy:tuple, foreground:bool=True):
         ''' Set point prompt, either foreground or background. '''
         color = 'lime' if foreground else 'red'
@@ -513,8 +510,30 @@ class GrainPlot(object):
         if self.blit:
             self.canvas.draw()
 
+    def hide_grains(self, hide: bool=True):
+        ''' Hide or unhide selected grains. '''
+        show = not hide
+        # Hide other elements if needed
+        if hide:
+            self.box_selector.clear()
+            self.info.set_visible(False)
+        # Show/hide selected grains
+        for grain in self.selected_grains:
+            grain.patch.set_visible(show)
+        # Update background
+        if self.blit:
+            self.canvas.draw()
+        # Set selected grains to default color when hidden,
+        # or restore selected color when unhidden.
+        # Avoids drawing wrong color into background on unhide.
+        for grain in self.selected_grains:
+            grain.select()
+        # Show info box again if needed, after background is drawn
+        if self.show_info and show:
+            self.info.set_visible(True)
+
     def merge_grains(self):
-        ''' Merge all selected grains. '''
+        ''' Attempt to merge all selected grains. '''
         # Verify there are at least two grains selected to merge
         if len(self.selected_grains) < 2:
             return
@@ -553,15 +572,17 @@ class GrainPlot(object):
         event
             Matplotlib mouseevent (different than normal event!)
         '''
-        # No double-clicks
-        # Not during box selection (shift is pressed)
-        # Not during toolbar interactions (pan/zoom)
-        # Not while grains are selected
-        # Not a pick event (don't put point prompts on existing grains)
-        if (False    
-                or event.dblclick
-                or self.box_selector.get_active()
+        # Ignore the following:
+        # double-clicks
+        # toolbar interactions (pan/zoom)
+        # clicks with ctrl held (hiding grains)
+        # clicks with box selection active
+        # clicks with grains selected
+        # Pick events (don't put point prompts on existing grains)
+        if (event.dblclick   
                 or self.canvas.toolbar.mode != ''
+                or self.ctrl_down
+                or self.box_selector.get_active()
                 or len(self.selected_grains) > 0
                 or self.last_pick == (round(event.xdata), round(event.ydata))):
             return
@@ -595,21 +616,26 @@ class GrainPlot(object):
         event
             Matplotlib KeyEvent
         '''
-        # Handle key
-        if event.key == 'c':
+        # Ignore keypresses while grains hidden or during box selection
+        if self.ctrl_down or self.box_selector.get_active():
+            return
+        key = event.key
+        if key == 'c':
             self.create_grain()
-        elif event.key == 'd' or event.key == 'delete':
+        elif key == 'd' or key == 'delete':
             self.delete_grains()
-        elif event.key == 'i':
+        elif key == 'i':
             self.toggle_info()
-        elif event.key == 'm':
+        elif key == 'm':
             self.merge_grains()
-        elif event.key == 'z':
+        elif key == 'z':
             self.undo_grain()
-        elif event.key == 'escape':
+        elif key == 'control':
+            self.ctrl_down = True
+            self.hide_grains()
+        elif key == 'escape':
             self.unselect_all()
-        elif event.key == 'shift':
-            self.unselect_grains()
+        elif key == 'shift':
             self.activate_box()
         else:
             # Don't update canvas if no key pressed
@@ -622,7 +648,11 @@ class GrainPlot(object):
             self.canvas.draw_idle()
 
     def onkeyup(self, event:mpl.backend_bases.KeyEvent):
-        if event.key == 'shift':
+        key = event.key
+        if key == 'control':
+            self.ctrl_down = False
+            self.hide_grains(False)
+        elif key == 'shift':
             # Deactivate box selector
             self.activate_box(False)
             # Cancel box if too small (based on minspan)
@@ -630,6 +660,14 @@ class GrainPlot(object):
             span = min(abs(xmax-xmin), abs(ymax-ymin))
             if span < self.minspan:
                 self.box_selector.clear()
+        else:
+            return
+        # Update canvas
+        if self.blit:
+            self.update()
+        else:
+            # Apparently necessary if plot shown twice
+            self.canvas.draw_idle()
 
     def onpick(self, event:mpl.backend_bases.PickEvent):
         '''
@@ -641,10 +679,16 @@ class GrainPlot(object):
             Matplotlib event
         '''
         mouseevent = event.mouseevent
-        # No doubleclicks, no toolbar, no scroll clicks, no box selection
+        # Ignore the following:
+        # Double clicks
+        # Toolbar interactions (pan/zoom)
+        # Scroll clicks
+        # Clicks while grains hidden (ctrl held)
+        # Clicks during box selection
         if (mouseevent.dblclick
                 or self.canvas.toolbar.mode != ''
                 or mouseevent.button == 2
+                or self.ctrl_down
                 or self.box_selector.get_active()):
             return
         # Save click location to block attempts to set a point prompt
