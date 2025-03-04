@@ -14,6 +14,16 @@ import skimage
 from tqdm import tqdm
 
 
+# Images larger than this will be downscaled
+# 4k resolution is (2160, 4096)
+IMAGE_MAX_SIZE = np.asarray((2160, 4096))
+
+# Speed up rendering a little?
+mplstyle.use('fast')
+
+# Init logger
+logger = logging.getLogger(__name__)
+
 # HACK: Bypass large image restriction
 from PIL import Image
 Image.MAX_IMAGE_PIXELS = None
@@ -22,19 +32,9 @@ Image.MAX_IMAGE_PIXELS = None
 if 'c' in mpl.rcParams['keymap.back']:
     mpl.rcParams['keymap.back'].remove('c')
 
-# HACK: Attach parent grain reference to the Polygon class
+# HACK: Attach parent grain reference to the mpatches.Polygon class
 # Makes it easy to use matplotlib "pick" event when clicking on a grain
 mpatches.Polygon.grain = None
-
-# Speed up rendering a little?
-mplstyle.use('fast')
-
-# Init logger
-logger = logging.getLogger(__name__)
-
-# Images larger than this will be downscaled
-# 4k resolution is (2160, 4096)
-IMAGE_MAX_SIZE = np.asarray((2160, 4096))
 
 
 class Grain(object):
@@ -286,12 +286,12 @@ class GrainPlot(object):
             self.ax.autoscale(enable=False)
         self.fig.tight_layout(pad=0)
         
-        # Interactive toolbar: inject unselect_all before any zoom/pan changes
+        # Interactive toolbar: inject clear_all before any zoom/pan changes
         # Avoids manual errors and bugs with blitting
         toolbar = self.canvas.toolbar
-        toolbar._update_view = self.unselect_before(toolbar._update_view)
-        toolbar.release_pan = self.unselect_before(toolbar.release_pan)
-        toolbar.release_zoom = self.unselect_before(toolbar.release_zoom)
+        toolbar._update_view = self._clear_before(toolbar._update_view)
+        toolbar.release_pan = self._clear_before(toolbar.release_pan)
+        toolbar.release_zoom = self._clear_before(toolbar.release_zoom)
         
         # Box selector
         self.box = np.zeros(4, dtype=int)
@@ -326,7 +326,7 @@ class GrainPlot(object):
             va='center',
             bbox={'boxstyle': 'round', 'fc':'w'}, 
             animated=blit)
-        self.show_info = True
+        self.showing_info = True
 
         # Draw grains and initialize plot
         logger.info('Drawing grains.')
@@ -338,11 +338,11 @@ class GrainPlot(object):
         logger.info('GrainPlot created!')
 
     # Display helpers ---
-    def unselect_before(self, f: object) -> object:
-        ''' Wrap a function to call unselect_all before it. '''
+    def _clear_before(self, f: object) -> object:
+        ''' Wrap a function to call clear_all before it. '''
         def newf(*args, **kwargs):
             if self.blit:
-                self.unselect_all()
+                self.clear_all()
             return f(*args, **kwargs)
         return newf
 
@@ -360,13 +360,17 @@ class GrainPlot(object):
         # Push to canvas
         self.canvas.blit(self.ax.bbox)
 
-    def toggle_info(self, show: bool=None) -> bool:
+    def show_info(self, show: bool=None) -> bool:
         ''' Toggle or set info box display. '''
         # Toggle info box flag
-        self.show_info = show or not self.show_info
+        self.showing_info = show or not self.showing_info
         # Show info box if requested and grains selected
-        self.info.set_visible(self.show_info and len(self.selected_grains))
-        return self.show_info
+        self.info.set_visible(self.showing_info and len(self.selected_grains))
+        return self.showing_info
+
+    def clear_info(self):
+        ''' Alias for self.show_info(False). '''
+        self.show_info(False)
 
     def update_info(self):
         ''' Update info box based on last selected grain. '''
@@ -395,19 +399,22 @@ class GrainPlot(object):
                 f"Area: {grain.data['area']:.0f}px")
         self.info.set_text(text)
         # Show info box if requested
-        if self.show_info:
+        if self.showing_info:
             self.info.set_visible(True)
 
     # Selection helpers ---
     def activate_box(self, activate=True):
-        ''' Turn on selection box. '''
-        self.unselect_grains()
-        box = self.box_selector
+        ''' Activate/deactivate selection box. '''
+        self.clear_grains()
         alpha = 0.4 if activate else 0.2
-        box.set_props(alpha=alpha)
+        box = self.box_selector
         box.set_handle_props(alpha=alpha, visible=activate)
+        box.set_props(alpha=alpha)
         box.set_active(activate)
 
+    def clear_box(self):
+        self.box_selector.clear()
+    
     def set_point(self, xy:tuple, foreground:bool=True):
         ''' Set point prompt, either foreground or background. '''
         color = 'lime' if foreground else 'red'
@@ -424,18 +431,19 @@ class GrainPlot(object):
         self.points = []
         self.point_labels = []
 
-    def unselect_grains(self):
+    def clear_grains(self):
         ''' Unselect all selected grains. '''
         for grain in self.selected_grains:
             grain.select()
         self.selected_grains = []
+        self.update_info()
 
-    def unselect_all(self):
+    def clear_all(self):
         ''' Clear prompts, unselect all grains, and hide the info box. '''
-        self.box_selector.clear()
+        self.clear_box()
+        self.clear_grains()
+        self.clear_info()
         self.clear_points()
-        self.unselect_grains()
-        self.toggle_info(False)
 
     # Manage grains ---
     @property
@@ -443,8 +451,8 @@ class GrainPlot(object):
         ''' Return copy of self.grains in full-image coordinates. '''
         grains = self._grains.copy()
         if self.scale != 1.:
-            for g in grains:
-                g.rescale(1 / self.scale)
+            for grain in grains:
+                grain.rescale(1 / self.scale)
         return grains
 
     @grains.setter
@@ -489,7 +497,7 @@ class GrainPlot(object):
         self._grains.append(grain)
         self.created_grains.append(grain)
         # Clear prompts
-        self.unselect_all()
+        self.clear_all()
         # Update background
         if self.blit:
             self.canvas.draw()
@@ -505,7 +513,7 @@ class GrainPlot(object):
             self._grains.remove(grain)
             if grain in self.created_grains:
                 self.created_grains.remove(grain)
-        self.unselect_all()
+        self.clear_all()
         # Update background
         if self.blit:
             self.canvas.draw()
@@ -515,7 +523,9 @@ class GrainPlot(object):
         show = not hide
         # Hide other elements if needed
         if hide:
-            self.box_selector.clear()
+            self.clear_box()
+            self.clear_points()
+            # Only hide info box temporarily
             self.info.set_visible(False)
         # Show/hide selected grains
         for grain in self.selected_grains:
@@ -528,8 +538,8 @@ class GrainPlot(object):
         # Avoids drawing wrong color into background on unhide.
         for grain in self.selected_grains:
             grain.select()
-        # Show info box again if needed, after background is drawn
-        if self.show_info and show:
+        # Show info box again if hidden
+        if self.showing_info and show and len(self.selected_grains):
             self.info.set_visible(True)
 
     def merge_grains(self):
@@ -542,7 +552,7 @@ class GrainPlot(object):
             [g.polygon for g in self.selected_grains])
         # Verify grains actually overlap, otherwise reject selections
         if isinstance(poly, shapely.MultiPolygon):
-            self.unselect_grains()
+            self.clear_grains()
             return
         # Make new merged grain
         new_grain = Grain(poly.exterior.xy)
@@ -559,7 +569,7 @@ class GrainPlot(object):
         if len(self.created_grains) < 1:
             return
         # Select and remove latest grain
-        self.unselect_all()
+        self.clear_all()
         self.selected_grains = [self.created_grains[-1]]
         self.delete_grains()
 
@@ -625,7 +635,7 @@ class GrainPlot(object):
         elif key == 'd' or key == 'delete':
             self.delete_grains()
         elif key == 'i':
-            self.toggle_info()
+            self.show_info()
         elif key == 'm':
             self.merge_grains()
         elif key == 'z':
@@ -634,7 +644,7 @@ class GrainPlot(object):
             self.ctrl_down = True
             self.hide_grains()
         elif key == 'escape':
-            self.unselect_all()
+            self.clear_all()
         elif key == 'shift':
             self.activate_box()
         else:
