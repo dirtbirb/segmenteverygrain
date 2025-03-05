@@ -39,7 +39,8 @@ plot = si.GrainPlot(
     image=image, 
     predictor=predictor,
     blit=True,
-    figsize=FIGSIZE
+    figsize=FIGSIZE,
+    image_max_size=(240, 320)
 )
 plot.activate()
 plt.show(block=True)
