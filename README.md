@@ -28,7 +28,8 @@ The original automated grain detection and segmentation process as laid out in [
 
 The original manual editing interface has been modified to facilitate:
 
-- Increased FPS, especially with high grain counts
+- Increased FPS (using blitting), especially with high grain counts
+- Large images, by displaying a downscaled version of the original
 - Using the same interface to create, delete, merge, and measure grains
 - More control over grain detection, including a selection box and arbitrary numbers of foreground/background prompts
 - A toggleable info box to display information about the last-selected grain
@@ -38,9 +39,10 @@ The original manual editing interface has been modified to facilitate:
 #### Usage
 Run the new interactive interface through the GUI or directly using [run_edit.py](run_edit.py), editing it for appropriate input and output locations. Navigation within the interface is described in the [matplotlib documentation](https://matplotlib.org/stable/users/explain/figure/interactive.html#interactive-navigation). Additional controls are:
 
-- **Left click**: Place foreground prompt or select existing grain 
-- **Shift + left click**: Create or adjust box selection tool
-- **Right click**: Place background prompt
+- `Left click`: Place foreground prompt or select existing grain 
+- `Shift + left click`: Create or adjust box selection tool
+- `Right click`: Place background prompt
+- `Control`: Hold to temporarily hide selected grains 
 - `Escape`: Remove all prompts and unselect all grains
 - `c`: Use selection box and/or foreground/background prompts to detect a grain
 - `d`: Delete selected (highlighted) grains
