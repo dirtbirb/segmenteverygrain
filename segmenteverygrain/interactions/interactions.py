@@ -82,8 +82,16 @@ class Grain(object):
 
     @property
     def polygon(self) -> shapely.Polygon:
-        ''' Return a shapely.Polygon representing the matplotlib patch. '''
-        return shapely.Polygon(self.xy.T)
+        ''' 
+        Return a shapely.Polygon representing the matplotlib patch.
+        
+        Returns
+        -------
+        poly : shapely.Polygon
+            Polygon representing the boundaries of this grain.
+        '''
+        poly = shapely.Polygon(self.xy.T)
+        return poly
 
     def measure(self, image: np.ndarray) -> pd.Series:
         '''
@@ -93,8 +101,7 @@ class Grain(object):
         Parameters
         ----------
         image : np.ndarray
-            Background image.
-            Used to calculate region intensity in self.data.
+            Background image, used to calculate region intensity in self.data.
 
         Returns
         -------
@@ -116,6 +123,43 @@ class Grain(object):
             self.data = pd.Series()
         return self.data
 
+    def rescale(self, scale: float):
+        '''
+        Scale polygon coordinates and measurements by given scale factor.
+
+        Parameters
+        ----------
+        scale : float
+            Factor by which to scale grain properties.
+        '''
+        # Convert coordinates
+        self.xy *= scale
+        # Convert data
+        if type(self.data) is type(None):
+            return
+        # For each type of measured value,
+        for k, dim in self.region_props.items():
+            # If the value has any length dimensions associated with it
+            if dim:
+                # Scale those values according to their length dimensions
+                for col in [c for c in self.data.keys() if k in c]:
+                    self.data[col] *= scale ** dim
+
+    def select(self) -> bool:
+        '''
+        Toggle whether grain is selected/unselected in a plot.
+        
+        Returns
+        -------
+        self.selected : bool
+            True if this grain is now selected.
+        '''
+        self.selected = not self.selected
+        self.patch.update(
+            self.selected_props if self.selected else self.default_props)
+        return self.selected
+
+    # Drawing ----------------------------------------------------------------              
     def draw_axes(self, ax: mpl.axes.Axes) -> dict[str: object]:
         '''
         Draw centroid and major/minor axes on the provided matplotlib axes.
@@ -185,42 +229,6 @@ class Grain(object):
             image = ax.get_images()[0].get_array()
             self.measure(image)
         return patch
-
-    def select(self) -> bool:
-        '''
-        Toggle whether grain is selected/unselected in a plot.
-        
-        Returns
-        -------
-        self.selected : bool
-            True if this grain is now selected.
-        '''
-        self.selected = not self.selected
-        self.patch.update(
-            self.selected_props if self.selected else self.default_props)
-        return self.selected
-
-    def rescale(self, scale: float):
-        '''
-        Scale polygon coordinates and measurements by given scale factor.
-
-        Parameters
-        ----------
-        scale : float
-            Factor by which to scale grain properties.
-        '''
-        # Convert coordinates
-        self.xy *= scale
-        # Convert data
-        if type(self.data) is type(None):
-            return
-        # For each type of measured value,
-        for k, dim in self.region_props.items():
-            # If the value has any length dimensions associated with it
-            if dim:
-                # Scale those values according to their length dimensions
-                for col in [c for c in self.data.keys() if k in c]:
-                    self.data[col] *= scale ** dim
 
 
 class GrainPlot(object):
@@ -352,7 +360,7 @@ class GrainPlot(object):
             self.canvas.draw()
         logger.info('GrainPlot created!')
 
-    # Display helpers ---
+    # Display helpers --------------------------------------------------------
     def _clear_before(self, f: object) -> object:
         ''' 
         Wrap a function to call self.clear_all() before it.
@@ -445,7 +453,7 @@ class GrainPlot(object):
         if self.showing_info:
             self.info.set_visible(True)
 
-    # Selection helpers ---
+    # Selection helpers ------------------------------------------------------
     def toggle_box(self, active: bool=None) -> bool:
         ''' 
         Activate/deactivate selection box.
@@ -521,7 +529,7 @@ class GrainPlot(object):
         self.clear_info()
         self.clear_points()
 
-    # Manage grains ---
+    # Manage grains ----------------------------------------------------------
     @property
     def grains(self) -> list:
         ''' 
@@ -691,7 +699,7 @@ class GrainPlot(object):
         self.selected_grains = [self.created_grains[-1]]
         self.delete_grains()
 
-    # Events ---
+    # Events -----------------------------------------------------------------
     def onclick(self, event: mpl.backend_bases.MouseEvent):
         '''
         Handle clicking anywhere on plot. Triggers on click release.
@@ -870,7 +878,7 @@ class GrainPlot(object):
             canvas.mpl_disconnect(cid)
         self.cids = []
     
-    # Output ---
+    # Output -----------------------------------------------------------------
     def savefig(self, fn: str):
         ''' 
         Save figure to disk. 

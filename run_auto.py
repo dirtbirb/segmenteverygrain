@@ -1,7 +1,6 @@
 import keras.utils
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
 import segment_anything
 import segmenteverygrain
 import segmenteverygrain.interactions as si
