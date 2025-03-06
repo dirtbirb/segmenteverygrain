@@ -81,8 +81,8 @@ class RootLayout(BoxLayout):
         Logger.info('Auto-segmenting: Normal image ---')
         plt.close('all')
 
-        # Generate prompts with UNET model
-        Logger.info('UNET prediction')
+        # Generate prompts with U-Net model
+        Logger.info('U-Net prediction')
         self.unet_image = segmenteverygrain.predict_image(
             self.image, self.unet_model, I=256)
         unet_labels, self.unet_coords = segmenteverygrain.label_grains(
@@ -245,7 +245,7 @@ class RootLayout(BoxLayout):
         Logger.info(f'Loaded checkpoint {self.sam_checkpoint_fn}.')
 
     def load_unet(self, path, filename):
-        Logger.info('Loading unet model...')
+        Logger.info('Loading U-Net model...')
         weights = segmenteverygrain.weighted_crossentropy
         self.unet_model = keras.saving.load_model(
             filename, custom_objects={'weighted_crossentropy': weights}
@@ -290,7 +290,7 @@ class RootLayout(BoxLayout):
             Logger.info(f'Saved {filename}.')
 
     def save_unet_image(self, filename):
-        # Save unet results for verification (auto segmenting!)
+        # Save U-Net results for verification (auto segmenting!)
         Logger.info(f'Saving unet image...')
         fig, ax = plt.subplots(figsize=FIGSIZE)
         ax.set_aspect('equal')
@@ -351,7 +351,7 @@ class RootLayout(BoxLayout):
 
     def show_load_unet(self):
         dialog = LoadDialog(load=self.load_unet, cancel=self.dismiss_popup)
-        self.show_dialog(dialog, title='Load Unet model', filters=['*.keras'])
+        self.show_dialog(dialog, title='Load U-Net model', filters=['*.keras'])
 
     def show_point_count(self):
         dialog = PointCountDialog(

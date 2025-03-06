@@ -6,6 +6,7 @@ import shapely
 
 
 def load_old_grains(fn: str) -> list:
+    ''' Load grain info from old csv format. '''
     grains = []
     for grain in pd.read_csv(fn).iterrows():
         out_coords = []
