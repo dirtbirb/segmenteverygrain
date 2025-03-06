@@ -58,7 +58,7 @@ for g in grains:
     g.measure(image=image)
 fn = './output/test_auto'
 # Grain shapes
-si.save_grains(fn + '_grains.csv', grains)
+si.save_grains(fn + '_grains.geojson', grains)
 # Grain image
 fig.savefig(fn + '_grains.jpg', bbox_inches='tight', pad_inches=0)
 # Summary data

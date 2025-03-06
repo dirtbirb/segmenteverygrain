@@ -15,7 +15,7 @@ image = si.load_image(fn)
 img_y, img_x = image.shape[:2]
 
 # Load grains
-fn = './output/test_edit_grains.csv'
+fn = './output/test_edit_grains.geojson'
 grains = si.load_grains(fn)
 
 
@@ -59,7 +59,7 @@ fn = './output/test_count'
 # Convert units
 pass
 # Grain shapes
-si.save_grains(fn + '_grains.csv', grains)
+si.save_grains(fn + '_grains.geojson', grains)
 # Grain image
 fig.savefig(fn + '_grains.jpg', bbox_inches='tight', pad_inches=0.2)
 # Summary data
