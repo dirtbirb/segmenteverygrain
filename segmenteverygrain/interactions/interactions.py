@@ -904,32 +904,26 @@ def load_image(fn: str) -> np.ndarray:
 
 def load_grains(fn: str) -> list:
     ''' 
-    Load grain boundaries from a csv.
+    Load grain boundaries from a GeoJSON file.
     
     Parameters
     ----------
     fn : str
-        Filename for csv to load.
+        Filename for GeoJSON file to read.
 
     Returns
     -------
     grains : list
         List of loaded Grain objects.
     '''
-    grains = []
-    for grain in pd.read_csv(fn).iterrows():
-        out_coords = []
-        for coord in grain[1].iloc[1][10:-2].split(', '):
-            x, y = coord.split(' ')
-            out_coords.append((float(x), float(y)))
-        grains.append(shapely.Polygon(out_coords))
-    grains = [Grain(np.array(p.exterior.xy)) for p in grains]
+    grains = [
+        Grain(p.exterior.xy) for p in segmenteverygrain.read_polygons(fn)]
     return grains
 
 
 def save_grains(fn: str, grains: list):
     ''' 
-    Save grain boundaries to a csv.
+    Save grain boundaries to a GeoJSON file.
     
     Parameters
     ----------
@@ -938,7 +932,7 @@ def save_grains(fn: str, grains: list):
     grains : list
         List of grains to write to disk.
     '''
-    pd.DataFrame([g.polygon for g in grains]).to_csv(fn)
+    segmenteverygrain.save_polygons([g.polygon for g in grains], fn)
 
 
 def get_summary(grains: list, px_per_m: float=1.) -> pd.DataFrame:
