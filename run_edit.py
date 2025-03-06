@@ -6,9 +6,8 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-
 FIGSIZE = (12, 8)   # in
-PX_PER_M = 1        # px/m; be sure not to convert units twice!
+PX_PER_M = 1        # px/m
 
 
 # Load test image
@@ -50,12 +49,10 @@ plot.deactivate()
 # Save results
 fn = './output/test_edit'
 logger.info(f'Saving results as {fn}')
-# Convert units
-pass
+grains = plot.grains
 # Grain shapes
 # for g in grains:
 #     g.measure(image=image)
-grains = plot.grains
 si.save_grains(fn + '_grains.geojson', grains)
 # Grain image
 plot.savefig(fn + '_grains.jpg')
@@ -66,5 +63,6 @@ si.save_histogram(fn + '_summary.jpg', grains, px_per_m=PX_PER_M)
 # Training mask
 si.save_mask(fn + '_mask.png', grains, image, scale=False)
 si.save_mask(fn + '_mask.jpg', grains, image, scale=True)
+
 
 logger.info(f'Saving complete!')
