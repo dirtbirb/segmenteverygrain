@@ -57,7 +57,7 @@ Run the new interactive interface through the GUI or directly using [run_edit.py
 The results of segmenteverygrain can be used to simulate the results of a manual grid count. This provides less information than segmentation of a complete image, but is more comparable to traditional methods. Currently there is no fine-grain cutoff threshold and points not directly landing on a grain are simply excluded.
 
 #### Usage
-After using segmenteverygrain to generate a grain info csv (ending in _grains.csv), generate a grid count through the GUI or by directly editing and running [run_point_count.py](run_point_count.py).
+After using segmenteverygrain to generate a grain info csv (ending in _grains.csv), generate a grid count through the GUI or by directly editing and running [run_grid_count.py](run_grid_count.py).
 
 ### Graphical interface
 
