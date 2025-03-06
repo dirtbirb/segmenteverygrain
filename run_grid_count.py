@@ -14,13 +14,13 @@ SPACING = 220       # px
 
 
 # Load image
-fn = 'torrey_pines_beach_image.jpeg'
+fn = 'examples/torrey_pines_beach_image.jpeg'
 logger.info(f'Loading image {fn}')
 image = si.load_image(fn)
 img_y, img_x = image.shape[:2]
 
 # Load grains
-fn = './output/test_edit_grains.geojson'
+fn = 'examples/test_edit_grains.geojson'
 logger.info(f'Loading grains from {fn}')
 grains = si.load_grains(fn)
 
@@ -56,10 +56,9 @@ for grain in tqdm(grains):
     grain.draw_axes(ax)
 
 # Plot grid
-point_colors = ['lime' if p else 'red' for p in points_found]
 ax.scatter(xs, ys,
     s=min(plot_image[:2].shape) * FIGURE_DPI,
-    c=point_colors,
+    c=['lime' if p else 'red' for p in points_found],
     edgecolors='black')
 
 

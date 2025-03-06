@@ -4,6 +4,7 @@ import numpy as np
 import segment_anything
 import segmenteverygrain
 import segmenteverygrain.interactions as si
+from tqdm import tqdm
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -16,7 +17,7 @@ PX_PER_M = 1        # px/m
 
 
 # Load test image
-fn = 'torrey_pines_beach_image.jpeg'
+fn = 'examples/torrey_pines_beach_image.jpeg'
 logger.info(f'Loading image {fn}')
 image = si.load_image(fn)
 
@@ -61,7 +62,7 @@ grains, sam_labels, mask, summary, fig, ax = segmenteverygrain.sam_segmentation(
 
 # Extract results
 grains = [si.Grain(np.array(g.exterior.xy)) for g in grains]
-for g in grains:
+for g in tqdm(grains):
     g.measure(image=image)
 fn = './output/test_auto'
 logger.info(f'Saving results as {fn}')
@@ -75,7 +76,7 @@ si.save_summary(fn + '_summary.csv', grains, px_per_m=PX_PER_M)
 si.save_histogram(fn + '_summary.jpg', grains, px_per_m=PX_PER_M)
 # Training mask
 si.save_mask(fn + '_mask.png', grains, image, scale=False)
-si.save_mask(fn + '_mask.jpg', grains, image, scale=True)
+si.save_mask(fn + '_mask2.jpg', grains, image, scale=True)
 
 
 logger.info(f'Auto-segmenting complete!')

@@ -14,7 +14,6 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.popup import Popup
 from kivy_garden.matplotlib.backend_kivyagg import FigureCanvasKivyAgg
 
-
 # HACK: Turn off crazy debug output
 import logging
 for logger in [logging.getLogger(name) for name in logging.root.manager.loggerDict]:
@@ -371,5 +370,4 @@ class SegmentApp(App):
     title = 'GrainTrainer2025'
 
 
-# Logger.setLevel(LOG_LEVELS['error'])
 SegmentApp().run()
