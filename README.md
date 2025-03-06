@@ -1,6 +1,6 @@
 # segmenteverygrain
 
-<img src="gravel_example_mask.png" width="600">
+<img src="examples/gravel_example_mask.png" width="600">
 
 ## Description
 
