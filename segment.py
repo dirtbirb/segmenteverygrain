@@ -217,7 +217,7 @@ class RootLayout(BoxLayout):
 
     # Save/load --------------------------------------------------------------
     def load_grains(self, path, filename):
-        # Load grain data csv
+        # Load grain data geojson
         Logger.info('Loading grains...')
         self.grains = si.load_grains(filename)
         self.grains_fn = os.path.basename(filename)
@@ -313,7 +313,7 @@ class RootLayout(BoxLayout):
         # Parse input: include path and name, remove extension
         filename = os.path.join(path, filename.split('.')[0])
         # Save results
-        self.save_grains(filename + '_grains.csv')
+        self.save_grains(filename + '_grains.geojson')
         self.save_summary(filename + '_summary.csv')
         if self.unet_image is not None:
             self.save_unet_image(filename + '_unet.jpg')
@@ -342,7 +342,7 @@ class RootLayout(BoxLayout):
 
     def show_load_grains(self):
         dialog = LoadDialog(load=self.load_grains, cancel=self.dismiss_popup)
-        self.show_dialog(dialog, title='Load grain data', filters=['*.csv'])
+        self.show_dialog(dialog, title='Load grain data', filters=['*.geojson'])
 
     def show_load_image(self):
         plt.close()

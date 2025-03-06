@@ -26,8 +26,8 @@ logger.info('Setting image predictor')
 predictor.set_image(image)
 
 # Load grains
-fn = './output/test_edit_grains.csv'
-# fn = 'input/Waimea_2m_611-617_largestjpng_grains.csv'
+fn = './output/test_edit_grains.geojson'
+# fn = 'input/Waimea_2m_611-617_largestjpng_grains.geojson'
 logger.info(f'Loading grains from {fn}')
 grains = si.load_grains(fn)
 # grains = []
@@ -56,7 +56,7 @@ pass
 # for g in grains:
 #     g.measure(image=image)
 grains = plot.grains
-si.save_grains(fn + '_grains.csv', grains)
+si.save_grains(fn + '_grains.geojson', grains)
 # Grain image
 plot.savefig(fn + '_grains.jpg')
 # Summary data
