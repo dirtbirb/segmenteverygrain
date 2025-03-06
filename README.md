@@ -29,9 +29,9 @@ The original automated grain detection and segmentation process as laid out in [
 The original manual editing interface has been modified to facilitate:
 
 - Increased FPS (using blitting), especially with high grain counts
-- Large images, by displaying a downscaled version of the original
+- Large images, by downscaling for display (while operating on the full-resolution image)
 - Using the same interface to create, delete, merge, and measure grains
-- More control over grain detection, including a selection box and arbitrary numbers of foreground/background prompts
+- More control over grain detection, including a selection box and arbitrary number of foreground/background prompts
 - A toggleable info box to display information about the last-selected grain
 - Undoing the most recently-created grain
 - Minor bugfixes like not resetting the zoom level when creating a grain
