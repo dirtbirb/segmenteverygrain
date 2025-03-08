@@ -123,7 +123,7 @@ class Grain(object):
             self.data = pd.Series()
         return self.data
 
-    def rescale(self, scale: float):
+    def rescale(self, scale: float, save: bool=True) -> pd.DataFrame:
         '''
         Scale polygon coordinates and measurements by given scale factor.
 
@@ -131,19 +131,29 @@ class Grain(object):
         ----------
         scale : float
             Factor by which to scale grain properties.
+        save : bool, default True
+            Whether to save the results (True) or just return them (False).
+        
+        Returns
+        -------
+        data : pd.DataFrame
+            Rescaled grain measurements.
         '''
         # Convert coordinates
-        self.xy *= scale
+        if save:
+            self.xy *= scale
         # Convert data
         if type(self.data) is type(None):
             return
+        data = self.data if save else self.data.copy()
         # For each type of measured value,
         for k, dim in self.region_props.items():
             # If the value has any length dimensions associated with it
             if dim:
                 # Scale those values according to their length dimensions
-                for col in [c for c in self.data.keys() if k in c]:
-                    self.data[col] *= scale ** dim
+                for col in [c for c in data.keys() if k in c]:
+                    data[col] *= scale ** dim
+        return data
 
     def select(self) -> bool:
         '''
@@ -239,6 +249,7 @@ class GrainPlot(object):
             image: np.ndarray = None, 
             predictor = None,
             blit: bool = True,
+            px_per_m: float = 1.,
             minspan: int = 10,
             image_alpha: float = 1.,
             image_max_size: tuple = IMAGE_MAX_SIZE,
@@ -254,6 +265,8 @@ class GrainPlot(object):
             SAM predictor used to create new grains.
         blit : bool, default True
             Whether to use blitting (much faster, potentially buggy).
+        px_per_m : float, default 1.0
+            Pixels per meter for unit conversion.
         minspan : int, default 10
             Minimum size for box selector tool.
         image_alpha : float, default 1.0
@@ -321,25 +334,49 @@ class GrainPlot(object):
         self.box = np.zeros(4, dtype=int)
         self.box_selector = mwidgets.RectangleSelector(
             self.ax, 
-            lambda *args: None,         # Don't do anything on selection
-            minspanx=minspan,           # Minimum selection size
-            minspany=minspan,   
-            useblit=True,               # Always try to use blitting
-            props={
+            onselect = lambda *args: None,  # Don't do anything on selection
+            minspanx = minspan,             # Minimum selection size
+            minspany = minspan,   
+            useblit = True,                 # Always try to use blitting
+            props = {
                 'facecolor': 'lime',
                 'edgecolor': 'black',
                 'alpha': 0.2,
                 'fill': True},
-            spancoords='pixels',
-            button=[1],                 # Left mouse button only
-            interactive=True,
-            state_modifier_keys={})     # Disable shift/ctrl modifiers
+            spancoords = 'pixels',
+            button = [1],                   # Left mouse button only
+            interactive = True,
+            state_modifier_keys = {})       # Disable shift/ctrl modifiers
         self.box_selector.set_active(False)
         # Replace RectangleSelector update methods to avoid redundant blitting
         if blit:
             self.box_selector.update = self.update
             self.box_selector.update_background = lambda *args: None
-        
+
+        # Scale bar selector
+        # self.scale_bar_selector = LineSelector(
+        self.px_per_m = px_per_m
+        self.scale_bar_selector = mwidgets.RectangleSelector(
+            self.ax,
+            onselect = self.onscale,
+            minspanx = minspan,
+            minspany = minspan,
+            useblit = True,
+            props = {
+                'facecolor': 'blue',
+                'edgecolor': 'black',
+                'alpha': 0.2,
+                'fill': True},
+            spancoords = 'pixels',
+            button = [2],
+            interactive = True,
+            state_modifier_keys = {})
+        self.scale_bar_selector.set_active(True)
+        # Replace RectangleSelector update methods to avoid redundant blitting
+        if blit:
+            self.box_selector.update = self.update
+            self.box_selector.update_background = lambda *args: None
+
         # Info box
         self.info = self.ax.annotate('',
             xy=(0, 0),
@@ -384,7 +421,7 @@ class GrainPlot(object):
     def update(self):
         ''' Blit background image and draw animated artists. '''
         # If not blitting, just request a redraw and return
-        # Apparently necessary if plot shown twice, for some reason
+        # Apparently necessary if plot shown twice
         if not self.blit:
             self.canvas.draw_idle()
             return
@@ -401,6 +438,17 @@ class GrainPlot(object):
         # Push to canvas
         self.canvas.blit(self.ax.bbox)
 
+    # Measurements -----------------------------------------------------------
+    def onscale(self, eclick: mpl.backend_bases.MouseEvent, erelease: mpl.backend_bases.MouseEvent):
+        x = abs(erelease.xdata - eclick.xdata)
+        y = abs(erelease.ydata - eclick.ydata)
+        px_per_m = np.sqrt(x*x + y*y)
+        if px_per_m < self.minspan:
+            self.scale_bar_selector.clear()
+            return
+        self.px_per_m = px_per_m
+        logger.info(f'Scale set to {px_per_m:f} pixels per meter.')
+    
     def toggle_info(self, show: bool=None) -> bool:
         ''' 
         Toggle or set info box display.
@@ -448,11 +496,17 @@ class GrainPlot(object):
         info = self.info
         info.xy = (x, y)
         info.xycoords = grain.patch
-        # Update text
-        data = grain.data
-        text = (f"Major: {data['major_axis_length']:.0f}px\n"
-                f"Minor: {data['minor_axis_length']:.0f}px\n"
-                f"Area: {data['area']:.0f}px")
+        # Update text, converting units if needed
+        if self.px_per_m == 1.:
+            data = grain.data
+            text = (f"Major: {data['major_axis_length']:.0f} px\n"
+                    f"Minor: {data['minor_axis_length']:.0f} px\n"
+                    f"Area: {data['area']:.0f} px")
+        else:   
+            data = grain.rescale(1 / self.px_per_m, save=False)
+            text = (f"Major: {data['major_axis_length']:.3} m\n"
+                    f"Minor: {data['minor_axis_length']:.3} m\n"
+                    f"Area: {data['area']:.3} m$^2$")
         info.set_text(text)
         # Show info box if requested
         if self.showing_info:
