@@ -383,6 +383,11 @@ class GrainPlot(object):
 
     def update(self):
         ''' Blit background image and draw animated artists. '''
+        # If not blitting, just request a redraw and return
+        # Apparently necessary if plot shown twice, for some reason
+        if not self.blit:
+            self.canvas.draw_idle()
+            return
         # Reset background from image
         self.canvas.restore_region(self.background)
         # Draw animated artists
@@ -725,20 +730,16 @@ class GrainPlot(object):
             return
         # Left click: grain prompt
         button = event.button
+        coords = (event.xdata, event.ydata)
         if button == 1:
-            self.set_point((event.xdata, event.ydata), True)
+            self.set_point(coords, True)
         # Right click: background prompt
         elif button == 3:
-            self.set_point((event.xdata, event.ydata), False)
-        # Neither: don't update the canvas
+            self.set_point(coords, False)
+        # Only update display if something happened
         else:
             return
-        # Update canvas
-        if self.blit:
-            self.update()
-        else:
-            # Apparently necessary if plot shown twice
-            self.canvas.draw_idle()
+        self.update()
 
     def ondraw(self, event: mpl.backend_bases.DrawEvent):
         ''' 
@@ -783,15 +784,10 @@ class GrainPlot(object):
             self.clear_all()
         elif key == 'shift':
             self.toggle_box(True)
+        # Only update display if something happened
         else:
-            # Don't update canvas if nothing happened
             return
-        # Update canvas
-        if self.blit:
-            self.update()
-        else:
-            # Apparently necessary if plot shown twice
-            self.canvas.draw_idle()
+        self.update()
 
     def onkeyup(self, event: mpl.backend_bases.KeyEvent):
         ''' 
@@ -813,15 +809,10 @@ class GrainPlot(object):
             xmin, xmax, ymin, ymax = self.box_selector.extents
             if min(abs(xmax-xmin), abs(ymax-ymin)) < self.minspan:
                 self.box_selector.clear()
+        # Only update display if something happened
         else:
-            # Don't update canvas if nothing happened
             return
-        # Update canvas
-        if self.blit:
-            self.update()
-        else:
-            # Apparently necessary if plot shown twice
-            self.canvas.draw_idle()
+        self.update()
 
     def onpick(self, event: mpl.backend_bases.PickEvent):
         '''
@@ -856,14 +847,9 @@ class GrainPlot(object):
             self.selected_grains.append(grain)
         else:
             self.selected_grains.remove(grain)
-        # Update info box
+        # Update info box and display
         self.update_info()
-        # Update canvas
-        if self.blit:
-            self.update()
-        else:
-            # Apparently necessary if plot shown twice
-            self.canvas.draw_idle()
+        self.update()
 
     def activate(self):
         ''' Enable interactive features. '''
