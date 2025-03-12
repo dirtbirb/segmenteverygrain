@@ -1,25 +1,48 @@
 import matplotlib.pyplot as plt
 import segment_anything
 import segmenteverygrain.interactions as si
+from tqdm import tqdm
 
 import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-FIGSIZE = (12, 8)   # in
-PX_PER_M = 1        # px/m
+FIGSIZE = (12, 8)                   # in
+PX_PER_M = 33.9                     # px/m
+IMAGE_MAX_SIZE = (2160, 4096)       # (y: px, x: px)
+IMAGE_ALPHA = 1.
 
 
-# Load test image
-fn = 'examples/torrey_pines_beach_image.jpeg'
+# Load image
+fn = 'examples/torrey_pines.jpeg'
 logger.info(f'Loading image {fn}')
 image = si.load_image(fn)
 
 # Load grains
-fn = 'examples/test_edit_grains.geojson'
+fn = 'examples/auto/torrey_pines_grains.geojson'
 logger.info(f'Loading grains from {fn}')
 grains = si.load_grains(fn)
+# If not loading any grains, use this line instead:
 # grains = []
+
+
+# # Filter grains (in pixels). Options:
+# #   area
+# #   centroid
+# #   major_axis_length
+# #   minor_axis_length 
+# #   orientation
+# #   perimeter
+# #   max_intensity
+# #   mean_intensity
+# #   min_intensity
+#
+# for g in grains:
+#     g.measure(image=image)
+# min_area = 1                              # m^2
+# min_area_px = min_area * PX_PER_M ** 2    # px^2
+# grains = [g for g in grains if g.data['area'] > min_area_px]
+
 
 # Load SAM
 fn = 'sam_vit_h_4b8939.pth'
@@ -33,24 +56,30 @@ predictor.set_image(image)
 # Display editing interface
 plot = si.GrainPlot(
     grains, 
-    image=image, 
-    predictor=predictor,
-    blit=True,
-    figsize=FIGSIZE,
-    image_max_size=(240, 320)
+    image = image, 
+    predictor = predictor,
+    blit = True,
+    figsize = FIGSIZE,
+    px_per_m = PX_PER_M,
+    image_max_size = IMAGE_MAX_SIZE,
+    image_alpha = IMAGE_ALPHA
 )
 plot.activate()
 plt.show(block=True)
 plot.deactivate()
 
 
+# Plot grain axes
+logger.info('Plotting grain axes')
+for grain in tqdm(grains):
+    grain.draw_axes(plot.ax)
+
+
 # Save results
-fn = './output/test_edit'
+fn = 'examples/interactive/torrey_pines'
 logger.info(f'Saving results as {fn}')
-grains = plot.grains
 # Grain shapes
-# for g in grains:
-#     g.measure(image=image)
+grains = plot.grains
 si.save_grains(fn + '_grains.geojson', grains)
 # Grain image
 plot.savefig(fn + '_grains.jpg')
