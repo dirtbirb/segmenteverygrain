@@ -123,7 +123,7 @@ class Grain(object):
             self.data = pd.Series()
         return self.data
 
-    def rescale(self, scale: float, save: bool=True) -> pd.DataFrame:
+    def rescale(self, scale: float, save: bool=True) -> pd.Series:
         '''
         Scale polygon coordinates and measurements by given scale factor.
 
@@ -136,7 +136,7 @@ class Grain(object):
         
         Returns
         -------
-        data : pd.DataFrame
+        data : pd.Series
             Rescaled grain measurements.
         '''
         # Convert coordinates
@@ -354,9 +354,8 @@ class GrainPlot(object):
             self.box_selector.update_background = lambda *args: None
 
         # Scale bar selector
-        # self.scale_bar_selector = LineSelector(
         self.px_per_m = px_per_m
-        self.scale_bar_selector = mwidgets.RectangleSelector(
+        self.scale_selector = mwidgets.RectangleSelector(
             self.ax,
             onselect = self.onscale,
             minspanx = minspan,
@@ -371,11 +370,11 @@ class GrainPlot(object):
             button = [2],
             interactive = True,
             state_modifier_keys = {})
-        self.scale_bar_selector.set_active(True)
+        self.scale_selector.set_active(True)
         # Replace RectangleSelector update methods to avoid redundant blitting
         if blit:
-            self.box_selector.update = self.update
-            self.box_selector.update_background = lambda *args: None
+            self.scale_selector.update = self.update
+            self.scale_selector.update_background = lambda *args: None
 
         # Info box
         self.info = self.ax.annotate('',
@@ -394,6 +393,7 @@ class GrainPlot(object):
         for grain in tqdm(self._grains):
             grain.draw_patch(self.ax)
         if blit:
+            self.artists = self.box_selector.artists + self.scale_selector.artists + (self.info,)
             self.canvas.draw()
         logger.info('GrainPlot created!')
 
@@ -431,8 +431,7 @@ class GrainPlot(object):
         # TODO: More efficient to maintain this list elsewhere?
         artists = (tuple(g.patch for g in self.selected_grains)
             + tuple(self.points)
-            + self.box_selector.artists
-            + (self.info,))
+            + self.artists)
         for a in artists:
             self.ax.draw_artist(a)
         # Push to canvas
@@ -444,7 +443,7 @@ class GrainPlot(object):
         y = abs(erelease.ydata - eclick.ydata)
         px_per_m = np.sqrt(x*x + y*y)
         if px_per_m < self.minspan:
-            self.scale_bar_selector.clear()
+            self.scale_selector.clear()
             return
         self.px_per_m = px_per_m
         logger.info(f'Scale set to {px_per_m:f} pixels per meter.')
@@ -474,14 +473,14 @@ class GrainPlot(object):
         ''' Alias for self.toggle_info(False). '''
         self.toggle_info(False)
 
-    def update_info(self):
+    def update_info(self, grain=None):
         ''' Update displayed info based on last selected grain. '''
         # Hide info box if no grains selected
         if not len(self.selected_grains):
             self.info.set_visible(False)
             return
         # Determine box position offset based on grain's position within plot
-        grain = self.selected_grains[-1]
+        grain = grain or self.selected_grains[-1]
         ext = grain.patch.get_extents()
         img_x, img_y = self.canvas.get_width_height()
         x = -0.1 if (ext.x1 + ext.x0) / img_x > 1 else 1.1
