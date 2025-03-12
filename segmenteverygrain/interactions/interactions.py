@@ -955,9 +955,27 @@ def load_image(fn: str) -> np.ndarray:
     return image
 
 
+def polygons_to_grains(polygons: list) -> list:
+    ''' 
+    Construct grains from a list of polygons defining grain boundaries.
+    
+    Parameters
+    ----------
+    polygons : list of shapely.Polygon
+        Polygons defining grain boundaries.
+
+    Returns
+    -------
+    grains : list
+        List of Grain objects.
+    '''
+    grains = [Grain(np.array(p.exterior.xy)) for p in polygons]
+    return grains
+
+
 def load_grains(fn: str) -> list:
     ''' 
-    Load grain boundaries from a GeoJSON file.
+    Construct grains from polygrons defined in a GeoJSON file.
     
     Parameters
     ----------
@@ -967,10 +985,9 @@ def load_grains(fn: str) -> list:
     Returns
     -------
     grains : list
-        List of loaded Grain objects.
+        List of Grain objects.
     '''
-    grains = [
-        Grain(p.exterior.xy) for p in segmenteverygrain.read_polygons(fn)]
+    grains = polygons_to_grains(segmenteverygrain.read_polygons(fn))
     return grains
 
 
@@ -1176,3 +1193,9 @@ def filter_grains_by_points(grains: list, points: list) -> tuple[list, list]:
             # Record that no grain was found at this point
             point_found.append(False)
     return point_grains, point_found
+
+
+def filter_grains_by_props(grains: list, **props):
+    for prop, func in props.items():
+        filtered_grains = [g for g in filtered_grains if func(g.data[prop])]
+    return filtered_grains
