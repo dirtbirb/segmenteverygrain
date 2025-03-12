@@ -768,6 +768,8 @@ class GrainPlot(object):
         event : MouseEvent
             Event details
         '''
+        if event.inaxes != self.ax:
+            return
         # Ignore the following:
         # double-clicks
         # toolbar interactions (pan/zoom)
@@ -816,6 +818,8 @@ class GrainPlot(object):
         event : KeyEvent
             Event details
         '''
+        if not event.inaxes == self.ax:
+            return
         # Ignore keypresses while grains hidden or during box selection
         if self.ctrl_down or self.box_selector.get_active():
             return
@@ -852,6 +856,8 @@ class GrainPlot(object):
         event : KeyEvent
             Event details.
         '''
+        if not event.inaxes == self.ax:
+            return
         key = event.key
         if key == 'control':
             self.ctrl_down = False
