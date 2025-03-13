@@ -25,7 +25,6 @@ grains = si.load_grains(fn)
 # If not loading any grains, use this line instead:
 # grains = []
 
-
 # # Filter grains (in pixels). Options:
 # #   area
 # #   centroid
@@ -53,7 +52,7 @@ logger.info('Setting image predictor')
 predictor.set_image(image)
 
 
-# Display editing interface
+# Display interactive interface
 plot = si.GrainPlot(
     grains, 
     image = image, 
@@ -69,27 +68,28 @@ plt.show(block=True)
 plot.deactivate()
 
 
-# Plot grain axes
+# Get updated grains (with proper scale) and unit conversion (if changed)
+grains = plot.grains
+px_per_m = plot.px_per_m
+
+# Add grain axes to plot
 logger.info('Plotting grain axes')
 for grain in tqdm(grains):
     grain.draw_axes(plot.ax)
-
 
 # Save results
 fn = 'examples/interactive/torrey_pines'
 logger.info(f'Saving results as {fn}')
 # Grain shapes
-grains = plot.grains
 si.save_grains(fn + '_grains.geojson', grains)
 # Grain image
 plot.savefig(fn + '_grains.jpg')
 # Summary data
-si.save_summary(fn + '_summary.csv', grains, px_per_m=PX_PER_M)
+si.save_summary(fn + '_summary.csv', grains, px_per_m=px_per_m)
 # Summary histogram
-si.save_histogram(fn + '_summary.jpg', grains, px_per_m=PX_PER_M)
+si.save_histogram(fn + '_summary.jpg', grains, px_per_m=px_per_m)
 # Training mask
 si.save_mask(fn + '_mask.png', grains, image, scale=False)
 si.save_mask(fn + '_mask2.jpg', grains, image, scale=True)
-
 
 logger.info(f'Saving complete!')
