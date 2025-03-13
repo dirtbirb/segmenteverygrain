@@ -489,12 +489,18 @@ class GrainPlot(object):
             else:
                 props = old_grain.default_props
             old_grain.patch.update(props)
-        # Update saved info_grain
-        self.info_grain = grain
-        # If no new grain indicated, hide info box and return
-        if grain is None:
+        # Hide info box and return if:
+        # - No new grain given
+        # - New grain is the same as the old grain
+        if (grain is None
+                or (grain is old_grain
+                    and grain is self.info_grain_candidate)):
+            self.info_grain = None
+            self.info_grain_candidate = None
             self.info.set_visible(False)
             return
+        # Update saved info_grain
+        self.info_grain = grain
         # Set color of new grain
         grain.patch.set_facecolor('blue')
         # Determine box position offset based on grain's position within plot
@@ -800,6 +806,9 @@ class GrainPlot(object):
         coords = (event.xdata, event.ydata)
         if button == 1:
             self.set_point(coords, True)
+        # Middle click: Forget candidate for info display
+        elif button == 2:
+            self.info_grain_candidate = None
         # Right click: background prompt
         elif button == 3:
             self.set_point(coords, False)
