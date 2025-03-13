@@ -785,16 +785,16 @@ class GrainPlot(object):
         event : MouseEvent
             Event details
         '''
-        if event.inaxes != self.ax:
-            return
-        # Ignore the following:
-        # double-clicks
-        # toolbar interactions (pan/zoom)
-        # clicks with ctrl held (hiding grains)
-        # clicks with box selection active
-        # clicks with grains selected
-        # pick events (don't put point prompts on existing grains)
-        if (event.dblclick   
+        # Ignore click if:
+        # - It's in a different axes
+        # - It's a double-click
+        # - Toolbar interaction is happening (pan/zoom)
+        # - Ctrl is held (hiding grains)
+        # - Box selection is active
+        # - Grains are selected
+        # - It was already handled by onpick
+        if (event.inaxes != self.ax
+                or event.dblclick   
                 or self.canvas.toolbar.mode != ''
                 or self.ctrl_down
                 or self.box_selector.get_active()
