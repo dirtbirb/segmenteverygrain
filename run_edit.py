@@ -36,7 +36,7 @@ grains = si.load_grains(fn)
 # #   max_intensity
 # #   mean_intensity
 # #   min_intensity
-#
+# #
 # for g in grains:
 #     g.measure(image=image)
 # min_area = 1                              # m^2
@@ -49,8 +49,8 @@ fn = 'sam_vit_h_4b8939.pth'
 logger.info(f'Loading SAM with checkpoint {fn}')
 sam = segment_anything.sam_model_registry['default'](checkpoint=fn)
 predictor = segment_anything.SamPredictor(sam)
-# logger.info('Setting image predictor')
-# predictor.set_image(image)
+logger.info('Setting image predictor')
+predictor.set_image(image)
 
 
 # Display interactive interface
