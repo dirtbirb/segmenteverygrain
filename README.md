@@ -31,6 +31,7 @@ The original manual editing interface has been modified to facilitate:
 - Increased FPS (using blitting), especially with high grain counts
 - Large images, by downscaling for display (while operating on the full-resolution image)
 - Using the same interface to create, delete, merge, and measure grains
+- Convert pixels to meters using a given scale length or by measuring a scale bar in the image
 - More control over grain detection, including a selection box and arbitrary number of foreground/background prompts
 - A toggleable info box to display information about the last-selected grain
 - Undoing the most recently-created grain
@@ -39,14 +40,15 @@ The original manual editing interface has been modified to facilitate:
 #### Usage
 Run the new interactive interface through the GUI or directly using [run_edit.py](run_edit.py), editing it for appropriate input and output locations. Navigation within the interface is described in the [matplotlib documentation](https://matplotlib.org/stable/users/explain/figure/interactive.html#interactive-navigation). Additional controls are:
 
-- `Left click`: Place foreground prompt or select existing grain 
-- `Shift + left click`: Create or adjust box selection tool
-- `Right click`: Place background prompt
-- `Control`: Hold to temporarily hide selected grains 
+- `Left click`: Select/unselect existing grain or place foreground prompt for grain detection
+- `Shift + left click/drag`: Create or adjust box prompt for grain detection
+- `Right click`: Place background prompt for grain detection
+- `Middle click`: Display measurement information about the indicated grain
+- `Middle click + drag`: Measure scale bar to calibrate pixels per meter
+- `Control`: Hold to temporarily hide selected grains
 - `Escape`: Remove all prompts and unselect all grains
 - `c`: Use selection box and/or foreground/background prompts to detect a grain
 - `d`: Delete selected (highlighted) grains
-- `i`: Toggle info box, showing details of the most recently-selected grain
 - `m`: Merge selected grains (must be touching)
 - `z`: Delete the most recently-created grain
 

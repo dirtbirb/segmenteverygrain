@@ -249,8 +249,9 @@ class GrainPlot(object):
             image: np.ndarray = None, 
             predictor = None,
             blit: bool = True,
-            px_per_m: float = 1.,
-            minspan: int = 10,
+            px_per_m: float = 1.,       # px/m
+            scale_m: float = 1.,        # m
+            minspan: int = 10,          # px
             image_alpha: float = 1.,
             image_max_size: tuple = IMAGE_MAX_SIZE,
             **kwargs):
@@ -267,6 +268,8 @@ class GrainPlot(object):
             Whether to use blitting (much faster, potentially buggy).
         px_per_m : float, default 1.0
             Pixels per meter for unit conversion.
+        scale_m : float, default 1.0
+            Length of any scale bar represented in the image, in meters.
         minspan : int, default 10
             Minimum size for box selector tool.
         image_alpha : float, default 1.0
@@ -283,6 +286,7 @@ class GrainPlot(object):
         self.cids = []
         self.events = {
             'button_press_event': self.onclick,
+            'button_release_event': self.onclickup,
             'draw_event': self.ondraw,
             'key_press_event': self.onkey,
             'key_release_event': self.onkeyup,
@@ -355,6 +359,7 @@ class GrainPlot(object):
 
         # Scale bar selector
         self.px_per_m = px_per_m
+        self.scale_m = scale_m
         self.scale_selector = mwidgets.RectangleSelector(
             self.ax,
             onselect = self.onscale,
@@ -385,7 +390,8 @@ class GrainPlot(object):
             va='center',
             bbox={'boxstyle': 'round', 'fc':'w'}, 
             animated=blit)
-        self.showing_info = True
+        self.info_grain = None
+        self.info_grain_candidate = None
 
         # Draw grains and initialize plot
         logger.info('Drawing grains.')
@@ -393,7 +399,9 @@ class GrainPlot(object):
         for grain in tqdm(self._grains):
             grain.draw_patch(self.ax)
         if blit:
-            self.artists = self.box_selector.artists + self.scale_selector.artists + (self.info,)
+            self.artists = [self.info,
+                *self.box_selector.artists,
+                *self.scale_selector.artists]
             self.canvas.draw()
         logger.info('GrainPlot created!')
 
@@ -429,8 +437,11 @@ class GrainPlot(object):
         self.canvas.restore_region(self.background)
         # Draw animated artists
         # TODO: More efficient to maintain this list elsewhere?
-        artists = (tuple(g.patch for g in self.selected_grains)
-            + tuple(self.points)
+        info_grain = self.info_grain
+        info_patch = [info_grain.patch] if info_grain is not None else []
+        artists = ([g.patch for g in self.selected_grains]
+            + info_patch
+            + self.points
             + self.artists)
         for a in artists:
             self.ax.draw_artist(a)
@@ -439,48 +450,54 @@ class GrainPlot(object):
 
     # Measurements -----------------------------------------------------------
     def onscale(self, eclick: mpl.backend_bases.MouseEvent, erelease: mpl.backend_bases.MouseEvent):
-        x = abs(erelease.xdata - eclick.xdata)
-        y = abs(erelease.ydata - eclick.ydata)
-        px_per_m = np.sqrt(x*x + y*y)
-        if px_per_m < self.minspan:
-            self.scale_selector.clear()
-            return
-        self.px_per_m = px_per_m
-        logger.info(f'Scale set to {px_per_m:f} pixels per meter.')
-    
-    def toggle_info(self, show: bool=None) -> bool:
-        ''' 
-        Toggle or set info box display.
+        '''
+        Update displayed units based on the selected scale bar length.
         
         Parameters
         ----------
-        show : bool
-            Whether to show the info box (True) or hide it (False).
-            If not provided, will toggle current value.
-        
-        Returns
-        -------
-        self.showing_info : bool
-            New state of flag indicating whether info box should be shown.
+        eclick: MouseEvent
+            Details for mouse button down event.
+        erelease: MouseEvent
+            Details for mouse button release event.
         '''
-        # Set or toggle info box flag
-        self.showing_info = show or not self.showing_info
-        # Show info box if requested and grains selected
-        self.info.set_visible(self.showing_info and len(self.selected_grains))
-        return self.showing_info
+        # Get length of selection box diagonal in pixels
+        x = abs(erelease.xdata - eclick.xdata)
+        y = abs(erelease.ydata - eclick.ydata)
+        px = np.sqrt(x*x + y*y)
+        # Verify that the selection is big enough
+        if px < self.minspan:
+            self.scale_selector.clear()
+            return
+        # Convert to pixels per meter using a known scale bar length
+        px_per_m = px / self.scale_m
+        self.px_per_m = px_per_m
+        logger.info(f'Scale set to {px_per_m:f} pixels per meter.')
+        # Update the info box using the new units
+        self.update_info(self.info_grain)
 
     def clear_info(self):
-        ''' Alias for self.toggle_info(False). '''
-        self.toggle_info(False)
+        ''' Clear the grain info box. '''
+        self.update_info(None)
 
     def update_info(self, grain=None):
-        ''' Update displayed info based on last selected grain. '''
-        # Hide info box if no grains selected
-        if not len(self.selected_grains):
+        ''' Update info box for specified grain. '''
+        # Restore proper color to previous info_grain
+        old_grain = self.info_grain
+        if old_grain is not None:
+            if old_grain.selected:
+                props = old_grain.selected_props
+            else:
+                props = old_grain.default_props
+            old_grain.patch.update(props)
+        # Update saved info_grain
+        self.info_grain = grain
+        # If no new grain indicated, hide info box and return
+        if grain is None:
             self.info.set_visible(False)
             return
+        # Set color of new grain
+        grain.patch.set_facecolor('blue')
         # Determine box position offset based on grain's position within plot
-        grain = grain or self.selected_grains[-1]
         ext = grain.patch.get_extents()
         img_x, img_y = self.canvas.get_width_height()
         x = -0.1 if (ext.x1 + ext.x0) / img_x > 1 else 1.1
@@ -507,9 +524,8 @@ class GrainPlot(object):
                     f"Minor: {data['minor_axis_length']:.3} m\n"
                     f"Area: {data['area']:.3} m$^2$")
         info.set_text(text)
-        # Show info box if requested
-        if self.showing_info:
-            self.info.set_visible(True)
+        # Show info box
+        self.info.set_visible(True)
 
     # Selection helpers ------------------------------------------------------
     def toggle_box(self, active: bool=None) -> bool:
@@ -695,16 +711,14 @@ class GrainPlot(object):
         hide : bool
             New hidden status.
         '''
-        show = not hide
         # Hide other elements if needed
         if hide:
             self.clear_box()
+            self.clear_info()
             self.clear_points()
-            # Only hide info box temporarily
-            self.info.set_visible(False)
         # Show/hide selected grains
         for grain in self.selected_grains:
-            grain.patch.set_visible(show)
+            grain.patch.set_visible(not hide)
         # Update background
         if self.blit:
             self.canvas.draw()
@@ -713,9 +727,6 @@ class GrainPlot(object):
         # Avoids drawing wrong color into background on unhide.
         for grain in self.selected_grains:
             grain.select()
-        # Show info box again if hidden
-        if self.showing_info and show and len(self.selected_grains):
-            self.info.set_visible(True)
         return hide
 
     def merge_grains(self) -> Grain:
@@ -760,7 +771,8 @@ class GrainPlot(object):
     # Events -----------------------------------------------------------------
     def onclick(self, event: mpl.backend_bases.MouseEvent):
         '''
-        Handle clicking anywhere on plot. Triggers on click release.
+        Handle clicking anywhere on plot.
+        Places foreground or background prompts for grain creation.
         
         Parameters
         ----------
@@ -796,6 +808,24 @@ class GrainPlot(object):
             return
         self.update()
 
+    def onclickup(self, event: mpl.backend_bases.MouseEvent):
+        '''
+        Handle click release events anywhere on plot.
+        Displays info about any grain indicated with a middle click.
+        
+        Parameters
+        ----------
+        event : MouseEvent
+            Event details
+        '''
+        # Only respond to scrollwheel release without dragging
+        if (event.button != 2
+                or self.last_pick != (round(event.xdata), round(event.ydata))):
+            return
+        # Update info box and display
+        self.update_info(self.info_grain_candidate)
+        self.update()
+
     def ondraw(self, event: mpl.backend_bases.DrawEvent):
         ''' 
         Update saved background image whenever a full redraw is triggered.
@@ -810,17 +840,27 @@ class GrainPlot(object):
 
     def onkey(self, event: mpl.backend_bases.KeyEvent):
         '''
-        Handle key presses.
+        Handle key presses as follows:
+        c: Create a grain from existing prompts.
+        d: Delete a selected grain.
+        m: Create a new grain by merging selected grains.
+        z: Undo the most recently created grain.
+        control (hold): Temporarily hide selected grains.
+        escape: Remove all selections, prompts, and info.
+        shift: Activate grain selection box prompt.
         
         Parameters
         ----------
         event : KeyEvent
             Event details
         '''
-        if not event.inaxes == self.ax:
-            return
-        # Ignore keypresses while grains hidden or during box selection
-        if self.ctrl_down or self.box_selector.get_active():
+        # Ignore keypress if:
+        # - It's from another axes
+        # - Grains are hidden
+        # - Box selection is active
+        if (not event.inaxes == self.ax
+                or self.ctrl_down 
+                or self.box_selector.get_active()):
             return
         # Handle keypress appropriately
         key = event.key
@@ -828,8 +868,6 @@ class GrainPlot(object):
             self.create_grain()
         elif key == 'd' or key == 'delete':
             self.delete_grains()
-        elif key == 'i':
-            self.toggle_info()
         elif key == 'm':
             self.merge_grains()
         elif key == 'z':
@@ -849,14 +887,17 @@ class GrainPlot(object):
     def onkeyup(self, event: mpl.backend_bases.KeyEvent):
         ''' 
         Handle key releases.
+        Unhides hidden grains or deactivates box selector.
         
         Parameters
         ----------
         event : KeyEvent
             Event details.
         '''
+        # Ignore key release from other axes
         if not event.inaxes == self.ax:
             return
+        # Handle release appropriately
         key = event.key
         if key == 'control':
             self.ctrl_down = False
@@ -875,39 +916,43 @@ class GrainPlot(object):
 
     def onpick(self, event: mpl.backend_bases.PickEvent):
         '''
-        Handle clicking on an existing grain to select/unselect it.
+        Handle clicking on an existing grain.
+        Left-click: Select/unselect the grain.
+        Middle-click: Show measurement info for indicated grain.
         
         Parameters
         ----------
         event : PickEvent
             Event details
         '''
-        # Ignore the following:
-        # double clicks
-        # toolbar interactions (pan/zoom)
-        # scrollwheel clicks
-        # clicks while grains hidden (ctrl held)
-        # clicks during box selection
+        # Ignore the pick event if:
+        # - Double-clicking
+        # - Navigating via the toolbar (pan/zoom)
+        # - Grains are hidden (ctrl held)
+        # - Box selection is active
         mouseevent = event.mouseevent
         if (mouseevent.dblclick
                 or self.canvas.toolbar.mode != ''
-                or mouseevent.button == 2
                 or self.ctrl_down
                 or self.box_selector.get_active()):
             return
-        # Save click location to block attempts to set a point prompt
+        # Save click location for reference by onclick / onclickup
         self.last_pick = (round(mouseevent.xdata), round(mouseevent.ydata))
-        # Only pick on left-click and when no point prompts exist
-        if mouseevent.button != 1 or len(self.points) > 0:
-            return
-        # Add/remove selected grain to/from selection list
-        grain = event.artist.grain
-        if grain.select():
-            self.selected_grains.append(grain)
+        # Left-click: Select grain if no point prompts exist
+        button = mouseevent.button
+        if button == 1 and len(self.points) == 0:
+            # Add/remove selected grain to/from selection list
+            grain = event.artist.grain
+            if grain.select():
+                self.selected_grains.append(grain)
+            else:
+                self.selected_grains.remove(grain)
+        # Middle-click: Save grain to show info if click is not dragged
+        elif button == 2:
+            self.info_grain_candidate = event.artist.grain
+        # Only display if something happened
         else:
-            self.selected_grains.remove(grain)
-        # Update info box and display
-        self.update_info()
+            return
         self.update()
 
     def activate(self):

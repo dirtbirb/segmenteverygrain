@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 
 FIGSIZE = (12, 8)                   # in
 PX_PER_M = 33.9                     # px/m
+SCALE_BAR_M = 0.5                   # m; scale bar length
 IMAGE_MAX_SIZE = (2160, 4096)       # (y: px, x: px)
 IMAGE_ALPHA = 1.
 
@@ -48,8 +49,8 @@ fn = 'sam_vit_h_4b8939.pth'
 logger.info(f'Loading SAM with checkpoint {fn}')
 sam = segment_anything.sam_model_registry['default'](checkpoint=fn)
 predictor = segment_anything.SamPredictor(sam)
-logger.info('Setting image predictor')
-predictor.set_image(image)
+# logger.info('Setting image predictor')
+# predictor.set_image(image)
 
 
 # Display interactive interface
@@ -60,6 +61,7 @@ plot = si.GrainPlot(
     blit = True,
     figsize = FIGSIZE,
     px_per_m = PX_PER_M,
+    scale_m = SCALE_BAR_M,
     image_max_size = IMAGE_MAX_SIZE,
     image_alpha = IMAGE_ALPHA
 )
