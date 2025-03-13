@@ -29,4 +29,4 @@ for fn in os.listdir(folder):
     si.save_grains(fn, grains)
 
 
-print('Complete.')
+print('Complete!')
