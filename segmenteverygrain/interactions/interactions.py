@@ -801,19 +801,18 @@ class GrainPlot(object):
                 or len(self.selected_grains) > 0
                 or self.last_pick == (round(event.xdata), round(event.ydata))):
             return
-        # Left click: grain prompt
+        # Left click: Foreground prompt
         button = event.button
         coords = (event.xdata, event.ydata)
         if button == 1:
             self.set_point(coords, True)
-        # Middle click: Forget candidate for info display
-        elif button == 2:
-            self.info_grain_candidate = None
-        # Right click: background prompt
+        # Right click: Background prompt
         elif button == 3:
             self.set_point(coords, False)
         # Only update display if something happened
         else:
+            # Forget any grain previously picked with scrollwheel click
+            self.info_grain_candidate = None
             return
         self.update()
 
