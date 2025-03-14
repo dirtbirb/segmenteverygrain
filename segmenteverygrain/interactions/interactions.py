@@ -329,9 +329,10 @@ class GrainPlot(object):
         # Interactive toolbar: inject clear_all before any zoom/pan changes
         # Avoids manual errors and bugs with blitting
         toolbar = self.canvas.toolbar
-        toolbar._update_view = self._clear_before(toolbar._update_view)
-        toolbar.release_pan = self._clear_before(toolbar.release_pan)
-        toolbar.release_zoom = self._clear_before(toolbar.release_zoom)
+        if hasattr(toolbar, '_update_view'):
+            toolbar._update_view = self._clear_before(toolbar._update_view)
+            toolbar.release_pan = self._clear_before(toolbar.release_pan)
+            toolbar.release_zoom = self._clear_before(toolbar.release_zoom)
         
         # Box selector
         self.minspan = minspan
