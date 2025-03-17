@@ -639,7 +639,7 @@ class GrainPlot(object):
             List of grains to copy, rescale, and save.
         '''
         grains = grains.copy()
-        if self.scale != 1:
+        if self.scale != 1.:
             for grain in grains:
                 grain.rescale(self.scale)
         self._grains = grains
