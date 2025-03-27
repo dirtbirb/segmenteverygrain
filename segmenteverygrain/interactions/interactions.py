@@ -1122,8 +1122,9 @@ def get_histogram(grains: list, px_per_m: float = 1.) -> tuple[object, object]:
         Resulting Matplotlib plot.
     '''
     df = get_summary(grains, px_per_m)
+    # plot_histogram_of_axis_lengths() takes values in mm, not m
     fig, ax = segmenteverygrain.plot_histogram_of_axis_lengths(
-        df['major_axis_length'], df['minor_axis_length'])
+        df['major_axis_length'] * 1000, df['minor_axis_length'] * 1000)
     return fig, ax
 
 
