@@ -1,3 +1,11 @@
+import segmenteverygrain.interactions as si
+import logging
+from kivy_garden.matplotlib.backend_kivyagg import FigureCanvasKivyAgg
+from kivy.uix.popup import Popup
+from kivy.uix.boxlayout import BoxLayout
+from kivy.properties import BooleanProperty, ListProperty, NumericProperty, ObjectProperty, StringProperty
+from kivy.logger import Logger, LOG_LEVELS
+from kivy.app import App
 import keras.saving
 import matplotlib.pyplot as plt
 import numpy as np
@@ -7,21 +15,12 @@ import segmenteverygrain
 
 import kivy
 kivy.require('2.3.1')
-from kivy.app import App
-from kivy.logger import Logger, LOG_LEVELS
-from kivy.properties import BooleanProperty, ListProperty, NumericProperty, ObjectProperty, StringProperty
-from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.popup import Popup
-from kivy_garden.matplotlib.backend_kivyagg import FigureCanvasKivyAgg
 
 # HACK: Turn off crazy debug output
-import logging
-for logger in [logging.getLogger(name) for name in logging.root.manager.loggerDict]:
+for name in logging.root.manager.loggerDict:
+    logger = logging.getLogger(name)
     if logger.level == 0:
         logger.setLevel(30)
-
-# HACK: Late import to avoid silencing the logger
-import segmenteverygrain.interactions as si
 
 FIGURE_DPI = 72
 # FIGSIZE = (img_x/FIGURE_DPI, img_y/FIGURE_DPI)
@@ -105,7 +104,7 @@ class RootLayout(BoxLayout):
         Logger.info('Auto-segmenting complete!')
         self.update_data_labels('Calculated!')
         self.show_save()
-    
+
     def large_segment(self):
         Logger.info('Auto-segmenting: Large image ---')
         plt.close('all')
@@ -144,12 +143,12 @@ class RootLayout(BoxLayout):
             Logger.info('Preparing SAM predictor')
             self.predictor.set_image(self.image)
             self.predictor_stale = False
-        
+
         # Display editing interface
         Logger.info('Displaying interactive interface')
         plot = si.GrainPlot(
-            self.grains, 
-            image=self.image, 
+            self.grains,
+            image=self.image,
             predictor=self.predictor,
             figsize=FIGSIZE
         )
@@ -177,14 +176,14 @@ class RootLayout(BoxLayout):
         Logger.info('Performing count')
         points, xs, ys = si.make_grid(self.image, spacing)
         grains, points_found = si.filter_grains_by_points(self.grains, points)
-        
+
         # Make GrainPlot and save it as a static image
         Logger.info('Plotting results')
         img_y, img_x = self.image.shape[:2]
-        plot = si.GrainPlot(grains, self.image, 
-            figsize=(img_x/FIGURE_DPI, img_y/FIGURE_DPI), 
-            dpi=FIGURE_DPI,
-            image_alpha=0.5)
+        plot = si.GrainPlot(grains, self.image,
+                            figsize=(img_x/FIGURE_DPI, img_y/FIGURE_DPI),
+                            dpi=FIGURE_DPI,
+                            image_alpha=0.5)
         plot_image = np.asarray(plot.canvas.buffer_rgba(), dtype=np.uint8)
 
         # Make new plot using static GrainPlot image as background
@@ -203,9 +202,9 @@ class RootLayout(BoxLayout):
         # Plot grid
         point_colors = ['lime' if p else 'red' for p in points_found]
         ax.scatter(xs, ys,
-            s=min(plot_image[:2].shape) * FIGURE_DPI,
-            c=point_colors,
-            edgecolors='black')
+                   s=min(plot_image[:2].shape) * FIGURE_DPI,
+                   c=point_colors,
+                   edgecolors='black')
         self.grains_fig = fig
 
         # Update GUI and show save dialog
@@ -213,8 +212,8 @@ class RootLayout(BoxLayout):
         self.grains = grains
         self.show_save()
 
-
     # Save/load --------------------------------------------------------------
+
     def load_grains(self, path, filename):
         # Load grain data geojson
         Logger.info('Loading grains...')
@@ -238,7 +237,8 @@ class RootLayout(BoxLayout):
 
     def load_sam_checkpoint(self, path, filename):
         Logger.info('Loading checkpoint...')
-        self.sam = segment_anything.sam_model_registry["default"](checkpoint=filename)
+        self.sam = segment_anything.sam_model_registry["default"](
+            checkpoint=filename)
         self.sam_checkpoint_fn = os.path.basename(filename)
         self.predictor = segment_anything.SamPredictor(self.sam)
         self.dismiss_popup()
@@ -252,7 +252,7 @@ class RootLayout(BoxLayout):
         )
         self.unet_fn = os.path.basename(filename)
         self.dismiss_popup()
-        Logger.info(f'Loaded {self.unet_fn}.')  
+        Logger.info(f'Loaded {self.unet_fn}.')
 
     def save_grain_image(self, filename):
         # TODO
@@ -296,8 +296,8 @@ class RootLayout(BoxLayout):
         ax.set_aspect('equal')
         ax.imshow(self.unet_image)
         plt.scatter(
-            np.array(self.unet_coords)[:,0],
-            np.array(self.unet_coords)[:,1],
+            np.array(self.unet_coords)[:, 0],
+            np.array(self.unet_coords)[:, 1],
             c='k')
         ax.set(xticks=[], yticks=[])
         fig.savefig(filename, bbox_inches='tight', pad_inches=0)
@@ -341,7 +341,8 @@ class RootLayout(BoxLayout):
 
     def show_load_grains(self):
         dialog = LoadDialog(load=self.load_grains, cancel=self.dismiss_popup)
-        self.show_dialog(dialog, title='Load grain data', filters=['*.geojson'])
+        self.show_dialog(dialog, title='Load grain data',
+                         filters=['*.geojson'])
 
     def show_load_image(self):
         plt.close()
@@ -360,7 +361,7 @@ class RootLayout(BoxLayout):
 
     def show_save(self):
         dialog = SaveDialog(
-            save=self.save, cancel=self.dismiss_popup, 
+            save=self.save, cancel=self.dismiss_popup,
             path='.', filename=self.image_fn)
         self.show_dialog(dialog, title='Save results')
 
