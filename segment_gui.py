@@ -1,4 +1,3 @@
-import segmenteverygrain.interactions as si
 import logging
 from kivy_garden.matplotlib.backend_kivyagg import FigureCanvasKivyAgg
 from kivy.uix.popup import Popup
@@ -21,6 +20,9 @@ for name in logging.root.manager.loggerDict:
     logger = logging.getLogger(name)
     if logger.level == 0:
         logger.setLevel(30)
+
+# HACK: Late import to avoid silencing the logger
+import segmenteverygrain.interactions as si
 
 FIGURE_DPI = 72
 # FIGSIZE = (img_x/FIGURE_DPI, img_y/FIGURE_DPI)
@@ -181,14 +183,14 @@ class RootLayout(BoxLayout):
         Logger.info('Plotting results')
         img_y, img_x = self.image.shape[:2]
         plot = si.GrainPlot(grains, self.image,
-                            figsize=(img_x/FIGURE_DPI, img_y/FIGURE_DPI),
+                            figsize=(img_x / FIGURE_DPI, img_y / FIGURE_DPI),
                             dpi=FIGURE_DPI,
                             image_alpha=0.5)
         plot_image = np.asarray(plot.canvas.buffer_rgba(), dtype=np.uint8)
 
         # Make new plot using static GrainPlot image as background
         fig = plt.figure(
-            figsize=(img_x/FIGURE_DPI, img_y/FIGURE_DPI),
+            figsize=(img_x / FIGURE_DPI, img_y / FIGURE_DPI),
             dpi=FIGURE_DPI)
         ax = fig.add_subplot()
         ax.imshow(plot_image, aspect='equal', origin='lower')
