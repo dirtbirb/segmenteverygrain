@@ -1,4 +1,6 @@
 # PyTorch models
+input/
+output/
 *.pth
 
 # Byte-compiled / optimized / DLL files
