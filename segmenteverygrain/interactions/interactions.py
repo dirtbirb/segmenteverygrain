@@ -113,8 +113,8 @@ class Grain(object):
         rasterized = rasterio.features.rasterize(
             [self.polygon], out_shape=image.shape[:2])
         # Calculate region properties
-        data = pd.DataFrame(skimage.measure.regionprops_table(rasterized,
-                                                              intensity_image=image, properties=self.region_props.keys()))
+        data = pd.DataFrame(skimage.measure.regionprops_table(
+            rasterized, intensity_image=image, properties=self.region_props.keys()))
         if len(data):
             self.data = data.iloc[0]
         else:
@@ -466,7 +466,7 @@ class GrainPlot(object):
         # Get length of selection box diagonal in pixels
         x = abs(erelease.xdata - eclick.xdata)
         y = abs(erelease.ydata - eclick.ydata)
-        px = np.sqrt(x*x + y*y)
+        px = np.sqrt(x * x + y * y)
         # Verify that the selection is big enough
         if px < self.minspan:
             self.scale_selector.clear()
@@ -919,7 +919,7 @@ class GrainPlot(object):
             self.toggle_box(False)
             # Cancel box if too small (based on minspan)
             xmin, xmax, ymin, ymax = self.box_selector.extents
-            if min(abs(xmax-xmin), abs(ymax-ymin)) < self.minspan:
+            if min(abs(xmax - xmin), abs(ymax - ymin)) < self.minspan:
                 self.box_selector.clear()
         # Only update display if something happened
         else:
