@@ -93,7 +93,7 @@ class Grain(object):
         poly = shapely.Polygon(self.xy.T)
         return poly
 
-    def measure(self, image: np.ndarray) -> pd.Series:
+    def measure(self, image: np.ndarray, raster: bool = False) -> pd.Series:
         '''
         Calculate grain information from image and matplotlib patch.
         Overwrites self.data.
@@ -108,20 +108,63 @@ class Grain(object):
         self.data : pd.Series
             Row for a DataFrame containing computed grain info.
         '''
-        # Get rasterized shape
-        # TODO: Just use a patch of the image and then convert coords
-        rasterized = rasterio.features.rasterize(
-            [self.polygon], out_shape=image.shape[:2])
-        # Calculate region properties
-        data = pd.DataFrame(skimage.measure.regionprops_table(
-            rasterized, intensity_image=image, properties=self.region_props.keys()))
-        if len(data):
-            self.data = data.iloc[0]
+        poly = self.polygon
+        props = self.region_props.keys()
+        # Old method
+        if raster:
+            # Get rasterized shape
+            rasterized = rasterio.features.rasterize(
+                [poly], out_shape=image.shape[:2])
+            # Calculate region properties
+            data = pd.DataFrame(skimage.measure.regionprops_table(
+                rasterized, intensity_image=image, properties=props))
+            # Convert to row of pd.DataFrame
+            if len(data):
+                data = data.iloc[0]
+            else:
+                # TODO: Diagnose why this happens sometimes
+                logger.error(f'MEASURE ERROR {pd.DataFrame(data)}')
+                data = pd.Series()
+        # New method
         else:
-            # TODO: Diagnose why this happens sometimes
-            logger.error(f'MEASURE ERROR {pd.DataFrame(data)}')
-            self.data = pd.Series()
-        return self.data
+            # Format grain data to match skimage.regionprops output
+            data = {}
+            # Size and location
+            poly_metrics = measure_polygon(poly)
+            if 'area' in props:
+                data['area'] = poly_metrics['area']
+            if 'centroid' in props:
+                data['centroid-0'], data['centroid-1'] = poly_metrics['centroid']
+            if 'perimeter' in props:
+                data['perimeter'] = poly.length
+            # Orientation of ellipse with same second moments as the polygon
+            # (i.e. the best-fit ellipse)
+            ellipse_metrics = measure_ellipse(poly_metrics)
+            if 'major_axis_length' in props:
+                data['major_axis_length'] = ellipse_metrics['major_axis_length']
+            if 'minor_axis_length' in props:
+                data['minor_axis_length'] = ellipse_metrics['minor_axis_length']
+            if 'orientation' in props:
+                data['orientation'] = ellipse_metrics['orientation']
+            # Color information
+            color_metrics = measure_colors(image, poly)
+            if 'max_intensity' in props:
+                data['max_intensity-0'] = color_metrics['max_intensity-0']
+                data['max_intensity-1'] = color_metrics['max_intensity-1']
+                data['max_intensity-2'] = color_metrics['max_intensity-2']
+            if 'min_intensity' in props:
+                data['min_intensity-0'] = color_metrics['min_intensity-0']
+                data['min_intensity-1'] = color_metrics['min_intensity-1']
+                data['min_intensity-2'] = color_metrics['min_intensity-2']
+            if 'mean_intensity' in props:
+                data['mean_intensity-0'] = color_metrics['mean_intensity-0']
+                data['mean_intensity-1'] = color_metrics['mean_intensity-1']
+                data['mean_intensity-2'] = color_metrics['mean_intensity-2']
+            # Convert to row of pd.DataFrame
+            data = pd.Series(data)
+        # Save and return results
+        self.data = data
+        return data
 
     def rescale(self, scale: float, save: bool = True) -> pd.Series:
         '''
@@ -195,16 +238,16 @@ class Grain(object):
         artists = {}
         # Centroid
         x0, y0 = data['centroid-1'] * scale, data['centroid-0'] * scale
-        artists['centroid'] = ax.plot(x0, y0, '.k')
+        artists['centroid'] = ax.plot(x0, y0, '.k')[0]
         # Major axis
         orientation = data['orientation']
         x = x0 - np.sin(orientation) * 0.5 * data['major_axis_length']
         y = y0 - np.cos(orientation) * 0.5 * data['major_axis_length']
-        artists['major'] = ax.plot((x0, x), (y0, y), '-k')
+        artists['major'] = ax.plot((x0, x), (y0, y), '-k')[0]
         # Minor axis
         x = x0 + np.cos(orientation) * 0.5 * data['minor_axis_length']
         y = y0 - np.sin(orientation) * 0.5 * data['minor_axis_length']
-        artists['minor'] = ax.plot((x0, x), (y0, y), '-k')
+        artists['minor'] = ax.plot((x0, x), (y0, y), '-k')[0]
         # Return dict of artist objects, potentially useful for blitting
         return artists
 
@@ -1257,3 +1300,158 @@ def filter_grains_by_props(grains: list, **props):
     for prop, func in props.items():
         filtered_grains = [g for g in filtered_grains if func(g.data[prop])]
     return filtered_grains
+
+
+def measure_colors(image: np.ndarray, polygon: shapely.Polygon) -> dict:
+    '''
+    Measure color intensities within a polygonal region of an image.
+
+    Parameters
+    ----------
+    image : np.ndarray
+        Input image for analysis.
+    polygon : shapely.Polygon
+        Polygon defining the region of interest within the image.
+
+    Returns
+    -------
+    dict
+        A dictionary containing the maximum, minimum, and mean intensity values
+        for each color channel (R, G, B) within the polygon.
+        Keys are formatted as 'max_intensity-0', 'min_intensity-0', 'mean_intensity-0'
+        for the red channel, and similarly for green (1) and blue (2) channels.
+        This is meant to match the output of skimage.measure.regionprops.
+    '''
+    # Rasterize polygon into a mask
+    bounds = np.array(polygon.bounds)
+    xmin, ymin = np.ceil(bounds[:2]).astype(np.int32)
+    xmax, ymax = np.floor(bounds[2:]).astype(np.int32)
+    h, w = ymax - ymin, xmax - xmin
+    mask = rasterio.features.rasterize(
+        [(polygon, 1)],
+        out_shape=(h, w),
+        transform=rasterio.transform.from_bounds(
+            xmin, ymax, xmax, ymin, w, h),
+        dtype=np.uint8
+    )
+
+    # Extract pixel coordinates within the polygon
+    y, x = np.where(mask == 1)
+    pixels = image[y + ymin, x + xmin]
+
+    # Return information about each color channel
+    r, g, b = pixels.T
+    return {
+        'max_intensity-0': r.max(),
+        'min_intensity-0': r.min(),
+        'mean_intensity-0': r.mean(),
+        'max_intensity-1': g.max(),
+        'min_intensity-1': g.min(),
+        'mean_intensity-1': g.mean(),
+        'max_intensity-2': b.max(),
+        'min_intensity-2': b.min(),
+        'mean_intensity-2': b.mean()
+    }
+
+
+def measure_polygon(polygon: shapely.Polygon) -> dict:
+    '''
+    Calculate the area, centroid, and second moments of area of a polygon.
+
+    Parameters
+    ----------
+    polygon : shapely.Polygon
+        The input polygon.
+
+    Returns
+    -------
+    dict
+        A dictionary containing:
+        - 'area': Area of the polygon.
+        - 'centroid': (Cy, Cx) coordinates of the centroid.
+        - 'Ixx': Second moment of area about the centroid (x-axis).
+        - 'Iyy': Second moment of area about the centroid (y-axis).
+        - 'Ixy': Product of inertia about the centroid.
+        This is meant to match the output of skimage.measure.regionprops.
+    '''
+    # Extract the exterior coordinates of the polygon
+    coords = np.array(polygon.exterior.coords)
+    x = coords[:-1, 0]  # x-coordinates of vertices
+    y = coords[:-1, 1]  # y-coordinates of vertices
+    x_next = coords[1:, 0]  # x-coordinates of the next vertices
+    y_next = coords[1:, 1]  # y-coordinates of the next vertices
+
+    # Calculate the common term for all edges
+    common = x * y_next - x_next * y
+
+    # Compute area
+    A = 0.5 * np.sum(common)
+
+    # Compute centroid
+    Cx = np.sum((x + x_next) * common) / (6 * A)
+    Cy = np.sum((y + y_next) * common) / (6 * A)
+
+    # Compute second moments of area about the origin
+    Ixx_origin = np.sum((y**2 + y * y_next + y_next**2) * common) / 12
+    Iyy_origin = np.sum((x**2 + x * x_next + x_next**2) * common) / 12
+    Ixy_origin = np.sum((x * y_next + 2 * x * y + 2 *
+                        x_next * y_next + x_next * y) * common) / 24
+
+    # Transform moments to be about the centroid
+    Ixx_centroid = Ixx_origin - A * Cy**2
+    Iyy_centroid = Iyy_origin - A * Cx**2
+    Ixy_centroid = Ixy_origin - A * Cx * Cy
+
+    return {
+        'area': A,
+        'centroid': (Cy, Cx),
+        'Ixx': Ixx_centroid,
+        'Iyy': Iyy_centroid,
+        'Ixy': Ixy_centroid
+    }
+
+
+def measure_ellipse(moments: dict) -> dict:
+    '''
+    Calculate the properties of an ellipse with the given second moments.
+
+    Parameters
+    ----------
+    moments : dict
+        Dictionary containing the second moments of a polygon:
+        - 'area': Area of the polygon.
+        - 'Ixx': Second moment of area about the x-axis.
+        - 'Iyy': Second moment of area about the y-axis.
+        - 'Ixy': Product of inertia.
+
+    Returns
+    -------
+    dict
+        A dictionary containing:
+        - 'orientation': Orientation of the ellipse in radians (from the x-axis).
+        - 'major_axis_length': Full length of the major axis.
+        - 'minor_axis_length': Full length of the minor axis.
+        This is meant to match the output of skimage.measure.regionprops.
+    '''
+    Ixx = moments['Ixx']
+    Iyy = moments['Iyy']
+    Ixy = moments['Ixy']
+
+    # Orientation (theta) in radians
+    theta = 0.5 * np.arctan2(2 * Ixy, Ixx - Iyy)
+
+    # Eigenvalues of the inertia tensor
+    common = np.sqrt(((Ixx - Iyy) / 2)**2 + Ixy**2)
+    lambda1 = (Ixx + Iyy) / 2 + common  # Major axis eigenvalue
+    lambda2 = (Ixx + Iyy) / 2 - common  # Minor axis eigenvalue
+
+    # Major and minor axis lengths
+    A = moments['area']
+    major_axis_length = 4 * np.sqrt(lambda1 / A)
+    minor_axis_length = 4 * np.sqrt(lambda2 / A)
+
+    return {
+        'orientation': theta,
+        'major_axis_length': major_axis_length,  # Full length of the major axis
+        'minor_axis_length': minor_axis_length  # Full length of the minor axis
+    }
