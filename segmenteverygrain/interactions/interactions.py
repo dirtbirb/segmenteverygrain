@@ -1403,10 +1403,10 @@ def measure_polygon(polygon: shapely.Polygon) -> dict:
     Ixy_centroid = Ixy_origin - A * Cx * Cy
 
     return {
-        'area': A,
+        'area': abs(A),
         'centroid': (Cy, Cx),
-        'Ixx': Ixx_centroid,
-        'Iyy': Iyy_centroid,
+        'Ixx': abs(Ixx_centroid),
+        'Iyy': abs(Iyy_centroid),
         'Ixy': Ixy_centroid
     }
 
