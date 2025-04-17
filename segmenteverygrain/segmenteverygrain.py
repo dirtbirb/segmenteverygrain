@@ -2025,7 +2025,8 @@ def plot_histogram_of_axis_lengths(major_axis_length, minor_axis_length, area=[]
     matching_classes, bounds = find_grain_size_classes(
         grain_size_classes, phi_min, phi_max)
     bounds = np.array(sorted(bounds)[::-1])
-    if xlimits:
+    bounds_worked = not bounds.size == 0
+    if xlimits and bounds_worked:
         bounds = bounds[(bounds >= phi_min) & (bounds <= phi_max)]
     for i in range(len(bounds) - 1):
         ax.text(bounds[i] * 0.5 + bounds[i + 1] * 0.5 + 0.05,
@@ -2034,10 +2035,10 @@ def plot_histogram_of_axis_lengths(major_axis_length, minor_axis_length, area=[]
                 0, max(n) + 0.1 * max(n)], 'k', linewidth=0.3)
     if xlimits:
         ax.set_xlim(phi_max, phi_min)
-    elif bounds:
+    elif bounds_worked:
         ax.set_xlim(bounds[0], bounds[-1])
     ax.set_ylim(0, max(n) + 0.1 * max(n))
-    if bounds:
+    if bounds_worked:
         ax.set_xticks(np.arange(bounds[-1], bounds[0] + 1))
         ax.set_xticklabels(
             [np.round(2**i, 3) for i in range(-bounds[-1], -bounds[0] - 1, -1)])
@@ -2045,7 +2046,7 @@ def plot_histogram_of_axis_lengths(major_axis_length, minor_axis_length, area=[]
     ax.set_ylabel('count')
     ax2 = ax.twiny()
     ax2.set_xlim(ax.get_xlim())
-    if bounds:
+    if bounds_worked:
         ax2.set_xticks(bounds)
         ax2.set_xticklabels([i for i in bounds])
         ax2.set_xlabel('phi scale')
