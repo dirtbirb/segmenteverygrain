@@ -22,7 +22,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.cluster import DBSCAN
 import rtree
 import itertools
-from glob import glob 
+from glob import glob
 import os
 from PIL import Image
 import json
@@ -38,6 +38,7 @@ from keras.saving import load_model
 from keras.optimizers import Adam
 
 from segment_anything import SamPredictor
+
 
 def predict_image_tile(im_tile, model):
     """
@@ -55,7 +56,7 @@ def predict_image_tile(im_tile, model):
     im_tile_pred : 3D array
         Predicted tile.
     """
-    
+
     # Check for invalid input
     if not isinstance(im_tile, np.ndarray):
         raise ValueError("Input image tile must be a numpy array.")
@@ -63,10 +64,11 @@ def predict_image_tile(im_tile, model):
         raise ValueError("Input image tile must be a 3D array.")
     if len(im_tile.shape) == 3 and im_tile.shape[2] != 3:
         raise ValueError("3D input image tile must have 3 channels.")
-    im_tile = np.expand_dims(im_tile, axis=0) # add batch dimension
-    im_tile_pred = model.predict(im_tile, verbose=0) # make prediction
-    im_tile_pred = im_tile_pred[0] # remove batch dimension
+    im_tile = np.expand_dims(im_tile, axis=0)  # add batch dimension
+    im_tile_pred = model.predict(im_tile, verbose=0)  # make prediction
+    im_tile_pred = im_tile_pred[0]  # remove batch dimension
     return im_tile_pred
+
 
 def predict_image(image, model, I):
     """
@@ -98,59 +100,75 @@ def predict_image(image, model, I):
     pad_rows = I - np.mod(image.shape[0], I)
     pad_cols = I - np.mod(image.shape[1], I)
     if image.ndim == 2:
-        image = np.stack((image, image, image), axis=-1) # convert to 3 channels
+        # convert to 3 channels
+        image = np.stack((image, image, image), axis=-1)
     if image.ndim == 3:
-        image = np.vstack((image, np.zeros((pad_rows, image.shape[1], image.shape[2]))))
-        image = np.hstack((image, np.zeros((image.shape[0], pad_cols, image.shape[2]))))
-    r = int(np.floor(image.shape[0]/I)) # number of rows of image tiles
-    c = int(np.floor(image.shape[1]/I)) # number of columns of image tiles
-    
-    I2 = int(I/2)
+        image = np.vstack(
+            (image, np.zeros((pad_rows, image.shape[1], image.shape[2]))))
+        image = np.hstack(
+            (image, np.zeros((image.shape[0], pad_cols, image.shape[2]))))
+    r = int(np.floor(image.shape[0] / I))  # number of rows of image tiles
+    c = int(np.floor(image.shape[1] / I))  # number of columns of image tiles
+
+    I2 = int(I / 2)
     W = np.hanning(I) * np.hanning(I)[:, np.newaxis]
     Wup = W.copy()
     Wup[:I2, :] = np.tile(np.hanning(I), (I2, 1))
     Wdown = W.copy()
     Wdown[I2:, :] = np.tile(np.hanning(I), (I2, 1))
 
-    image = np.hstack((np.zeros((r*I, I2, 3)), image, np.zeros((r*I, I2, 3)))) # padding on the left and right sides
+    # padding on the left and right sides
+    image = np.hstack(
+        (np.zeros((r * I, I2, 3)), image, np.zeros((r * I, I2, 3))))
     image_pred = np.zeros((image.shape[0], image.shape[1], 3))
     print('segmenting image tiles...')
-    for i in trange(c+1): # rows, no offset
-        for j in range(1,2*r-2): # columns
-            im_tile = image[j*I2:(j+2)*I2, i*I:(i+1)*I, :]/255.0
+    for i in trange(c + 1):  # rows, no offset
+        for j in range(1, 2 * r - 2):  # columns
+            im_tile = image[j * I2:(j + 2) * I2, i * I:(i + 1) * I, :] / 255.0
             im_tile_pred = predict_image_tile(im_tile, model)
             for layer in range(3):
-                image_pred[j*I2:(j+2)*I2, i*I:(i+1)*I, layer] += im_tile_pred[:, :, layer] * W
-    for i in range(c+1): # first row
-        im_tile = image[:2*I2, i*I:(i+1)*I, :]/255.0
+                image_pred[j * I2:(j + 2) * I2, i * I:(i + 1)
+                           * I, layer] += im_tile_pred[:, :, layer] * W
+    for i in range(c + 1):  # first row
+        im_tile = image[:2 * I2, i * I:(i + 1) * I, :] / 255.0
         im_tile_pred = predict_image_tile(im_tile, model)
         for layer in range(3):
-            image_pred[:2*I2, i*I:(i+1)*I, layer] += im_tile_pred[:, :, layer] * Wup
-    for i in range(c+1): # last row
-        im_tile = image[(2*r-2)*I2:2*r*I2, i*I:(i+1)*I, :]/255.0
-        im_tile_pred = predict_image_tile(im_tile,model)
+            image_pred[:2 * I2, i * I:(i + 1) * I,
+                       layer] += im_tile_pred[:, :, layer] * Wup
+    for i in range(c + 1):  # last row
+        im_tile = image[(2 * r - 2) * I2:2 * r * I2,
+                        i * I:(i + 1) * I, :] / 255.0
+        im_tile_pred = predict_image_tile(im_tile, model)
         for layer in range(3):
-            image_pred[(2*r-2)*I2:2*r*I2, i*I:(i+1)*I, layer] += im_tile_pred[:, :, layer] * Wdown
-    for i in trange(c): # rows, half offset
-        for j in range(1,2*r-2): # columns
-            im_tile = image[j*I2:(j+2)*I2, i*I+I2:(i+1)*I+I2, :]/255.0
-            im_tile_pred = predict_image_tile(im_tile,model)
+            image_pred[(2 * r - 2) * I2:2 * r * I2, i * I:(i + 1)
+                       * I, layer] += im_tile_pred[:, :, layer] * Wdown
+    for i in trange(c):  # rows, half offset
+        for j in range(1, 2 * r - 2):  # columns
+            im_tile = image[j * I2:(j + 2) * I2, i *
+                            I + I2:(i + 1) * I + I2, :] / 255.0
+            im_tile_pred = predict_image_tile(im_tile, model)
             for layer in range(3):
-                image_pred[j*I2:(j+2)*I2, i*I+I2:(i+1)*I+I2, layer] += im_tile_pred[:, :, layer] * W
-    for i in range(c): # first row
-        im_tile = image[:2*I2, i*I+I2:(i+1)*I+I2, :]/255.0
-        im_tile_pred = predict_image_tile(im_tile,model)
+                image_pred[j * I2:(j + 2) * I2, i * I + I2:(i + 1)
+                           * I + I2, layer] += im_tile_pred[:, :, layer] * W
+    for i in range(c):  # first row
+        im_tile = image[:2 * I2, i * I + I2:(i + 1) * I + I2, :] / 255.0
+        im_tile_pred = predict_image_tile(im_tile, model)
         for layer in range(3):
-            image_pred[:2*I2, i*I+I2:(i+1)*I+I2, layer] += im_tile_pred[:, :, layer] * Wup
-    for i in range(c): # last row
-        im_tile = image[(2*r-2)*I2:2*r*I2, i*I+I2:(i+1)*I+I2, :]/255.0
-        im_tile_pred = predict_image_tile(im_tile,model)
+            image_pred[:2 * I2, i * I +
+                       I2:(i + 1) * I + I2, layer] += im_tile_pred[:, :, layer] * Wup
+    for i in range(c):  # last row
+        im_tile = image[(2 * r - 2) * I2:2 * r * I2, i *
+                        I + I2:(i + 1) * I + I2, :] / 255.0
+        im_tile_pred = predict_image_tile(im_tile, model)
         for layer in range(3):
-            image_pred[(2*r-2)*I2:2*r*I2, i*I+I2:(i+1)*I+I2, layer] += im_tile_pred[:, :, layer] * Wdown
+            image_pred[(2 * r - 2) * I2:2 * r * I2, i * I + I2:(i + 1)
+                       * I + I2, layer] += im_tile_pred[:, :, layer] * Wdown
 
-    image_pred = image_pred[:, I2:-I2, :] # crop the left and right side padding
-    image_pred = image_pred[:-pad_rows, :-pad_cols, :] # get rid of padding
+    # crop the left and right side padding
+    image_pred = image_pred[:, I2:-I2, :]
+    image_pred = image_pred[:-pad_rows, :-pad_cols, :]  # get rid of padding
     return image_pred
+
 
 def label_grains(image, image_pred, dbs_max_dist=20.0):
     """
@@ -173,24 +191,32 @@ def label_grains(image, image_pred, dbs_max_dist=20.0):
         pixel coordinates of the prompts
     """
 
-    grains = image_pred[:,:,1].copy() # grain prediction from semantic segmentation result
+    # grain prediction from semantic segmentation result
+    grains = image_pred[:, :, 1].copy()
     grains[grains >= 0.5] = 1
     grains[grains < 0.5] = 0
     grains = grains.astype('bool')
-    labels_simple, n_elems = measure.label(grains, return_num = True, connectivity=1)
-    props = regionprops_table(labels_simple, intensity_image = image, properties=('label', 'area', 'centroid'))
+    labels_simple, n_elems = measure.label(
+        grains, return_num=True, connectivity=1)
+    props = regionprops_table(
+        labels_simple, intensity_image=image, properties=('label', 'area', 'centroid'))
     grain_data_simple = pd.DataFrame(props)
-    coords_simple = np.vstack((grain_data_simple['centroid-1'], grain_data_simple['centroid-0'])).T # use the centroids of the Unet grains as 'simple' prompts
+    # use the centroids of the Unet grains as 'simple' prompts
+    coords_simple = np.vstack(
+        (grain_data_simple['centroid-1'], grain_data_simple['centroid-0'])).T
     coords_simple = coords_simple.astype('int32')
-    background_probs = image_pred[:,:,0][coords_simple[:,1], coords_simple[:,0]]
-    inds = np.where(background_probs < 0.3)[0] # get rid of prompts that are likely to be background
+    background_probs = image_pred[:, :,
+                                  0][coords_simple[:, 1], coords_simple[:, 0]]
+    # get rid of prompts that are likely to be background
+    inds = np.where(background_probs < 0.3)[0]
     coords_simple = coords_simple[inds, :]
 
-    bounds = image_pred[:,:,2].copy() # grain boundary prediction
+    bounds = image_pred[:, :, 2].copy()  # grain boundary prediction
     bounds[bounds >= 0.5] = 1
     bounds[bounds < 0.5] = 0
     bounds = bounds.astype('bool')
-    temp_labels, n_elems = measure.label(bounds, return_num = True, connectivity=1)
+    temp_labels, n_elems = measure.label(
+        bounds, return_num=True, connectivity=1)
     # Find the object with the largest area:
     label_counts = np.bincount(temp_labels.ravel())
     labels = np.where(label_counts > 100)[0][1:]
@@ -199,27 +225,30 @@ def label_grains(image, image_pred, dbs_max_dist=20.0):
         for label in labels:
             temp_labels[temp_labels == label] = largest_label
         bounds[temp_labels != largest_label] = 0
-        bounds = bounds-1
+        bounds = bounds - 1
         bounds[bounds < 0] = 1
         bounds = bounds.astype('bool')
         distance = ndi.distance_transform_edt(bounds)
-        coords = peak_local_max(distance, footprint=np.ones((3, 3)), labels=bounds.astype('bool'))
-        background_probs = image_pred[:,:,0][coords[:,0], coords[:,1]]
+        coords = peak_local_max(distance, footprint=np.ones(
+            (3, 3)), labels=bounds.astype('bool'))
+        background_probs = image_pred[:, :, 0][coords[:, 0], coords[:, 1]]
         inds = np.where(background_probs < 0.3)[0]
         coords = coords[inds, :]
         mask = np.zeros(distance.shape, dtype=bool)
         mask[tuple(coords.T)] = True
         markers, _ = ndi.label(mask)
         labels = watershed(-distance, markers, mask=bounds)
-        props = regionprops_table(labels, intensity_image = image, properties=('label', 'area', 'centroid', 'major_axis_length', 'minor_axis_length', 
-                                                                                        'orientation', 'perimeter', 'max_intensity', 'mean_intensity', 'min_intensity'))
+        props = regionprops_table(labels, intensity_image=image, properties=('label', 'area', 'centroid', 'major_axis_length', 'minor_axis_length',
+                                                                             'orientation', 'perimeter', 'max_intensity', 'mean_intensity', 'min_intensity'))
         grain_data = pd.DataFrame(props)
         if len(grain_data) > 0:
-            coords = np.vstack((grain_data['centroid-1'].values, grain_data['centroid-0'].values)).T
+            coords = np.vstack(
+                (grain_data['centroid-1'].values, grain_data['centroid-0'].values)).T
             # Create a DBSCAN clustering object
             dbscan = DBSCAN(eps=dbs_max_dist, min_samples=2)
             # Fit the data to the DBSCAN object
-            dbscan.fit(np.vstack((grain_data['centroid-1'], grain_data['centroid-0'])).T)
+            dbscan.fit(
+                np.vstack((grain_data['centroid-1'], grain_data['centroid-0'])).T)
             # Get the cluster labels for each point (-1 represents noise/outliers)
             db_labels = dbscan.labels_
             coords_ws = coords[np.where(db_labels == -1)[0]]
@@ -227,8 +256,10 @@ def label_grains(image, image_pred, dbs_max_dist=20.0):
                 xy = np.mean(coords[np.where(db_labels == i)[0]], axis=0)
                 coords_ws = np.vstack((coords_ws, xy))
             coords_ws = coords_ws.astype('int32')
-            background_probs = image_pred[:,:,0][coords_ws[:,1], coords_ws[:,0]]
-            inds = np.where(background_probs < 0.3)[0] # get rid of prompts that are likely to be background
+            background_probs = image_pred[:, :,
+                                          0][coords_ws[:, 1], coords_ws[:, 0]]
+            # get rid of prompts that are likely to be background
+            inds = np.where(background_probs < 0.3)[0]
             coords_ws = coords_ws[inds, :]
             all_coords = np.vstack((coords_ws, coords_simple))
         else:
@@ -236,6 +267,7 @@ def label_grains(image, image_pred, dbs_max_dist=20.0):
     else:
         all_coords = coords_simple
     return labels_simple, all_coords
+
 
 def one_point_prompt(x, y, image, predictor, ax=False):
     """
@@ -274,7 +306,8 @@ def one_point_prompt(x, y, image, predictor, ax=False):
     new_scores = []
     if len(masks) >= 1:
         for ind in range(len(masks)):
-            if np.sum(masks[ind])/(image.shape[0]*image.shape[1]) <= 0.5: # if mask is very large compared to size of the image
+            # if mask is very large compared to size of the image
+            if np.sum(masks[ind]) / (image.shape[0] * image.shape[1]) <= 0.5:
                 new_scores.append(scores[ind])
                 if masks.ndim > 2:
                     new_masks.append(masks[ind, :, :])
@@ -284,8 +317,9 @@ def one_point_prompt(x, y, image, predictor, ax=False):
         masks = new_masks
         scores = new_scores
         ind = np.argmax(scores)
-        temp_labels, n_elems = measure.label(masks[ind], return_num = True, connectivity=1)
-        if n_elems > 1: # if the mask has more than one element, find the largest one and delete the rest
+        temp_labels, n_elems = measure.label(
+            masks[ind], return_num=True, connectivity=1)
+        if n_elems > 1:  # if the mask has more than one element, find the largest one and delete the rest
             mask = masks[ind]
             # Find the object with the largest area
             label_counts = np.bincount(temp_labels.ravel())
@@ -295,25 +329,31 @@ def one_point_prompt(x, y, image, predictor, ax=False):
             mask = masks[ind]
         contours = measure.find_contours(mask, 0.5)
         if len(contours) > 0:
-            sx = contours[0][:,1]
-            sy = contours[0][:,0]
+            sx = contours[0][:, 1]
+            sy = contours[0][:, 0]
         else:
-            sx = []; sy = []
+            sx = []
+            sy = []
         if np.any(mask[0, :]) or np.any(mask[-1, :]) or np.any(mask[:, 0]) or np.any(mask[0, -1]):
             mask = np.pad(mask, 1, mode='constant')
             contours = measure.find_contours(mask, 0.5)
-            sx = contours[0][:,1]
-            sy = contours[0][:,0]
+            sx = contours[0][:, 1]
+            sy = contours[0][:, 0]
             if np.any(mask[1, :]):
-                sy = sy-1
-            if np.any(mask[:,1]):
-                sx = sx-1
+                sy = sy - 1
+            if np.any(mask[:, 1]):
+                sx = sx - 1
             mask = mask[1:-1, 1:-1]
         if len(sx) > 0 and ax:
-            color = np.concatenate([np.random.random(3), np.array([0.6])], axis=0)
+            color = np.concatenate(
+                [np.random.random(3), np.array([0.6])], axis=0)
             ax.fill(sx, sy, facecolor=color, edgecolor='k', alpha=0.5)
-    else: sx = []; sy = []; mask = np.zeros_like(image[:,:,0])
+    else:
+        sx = []
+        sy = []
+        mask = np.zeros_like(image[:, :, 0])
     return sx, sy, mask
+
 
 def two_point_prompt(x1, y1, x2, y2, image, predictor, ax=False):
     """
@@ -352,16 +392,17 @@ def two_point_prompt(x1, y1, x2, y2, image, predictor, ax=False):
         multimask_output=True,
     )
     ind = np.argmax(scores)
-    if np.sum(masks[ind])/(image.shape[0]*image.shape[1]) > 0.1:
+    if np.sum(masks[ind]) / (image.shape[0] * image.shape[1]) > 0.1:
         scores = np.delete(scores, ind)
         ind = np.argmax(scores)
     contours = measure.find_contours(masks[ind], 0.5)
-    sx = contours[0][:,1]
-    sy = contours[0][:,0]
+    sx = contours[0][:, 1]
+    sy = contours[0][:, 0]
     if ax:
         color = np.concatenate([np.random.random(3), np.array([0.6])], axis=0)
         ax.fill(sx, sy, facecolor=color, edgecolor='k', alpha=0.5)
     return sx, sy
+
 
 def predict_from_prompts(predictor, box=None, points=None, point_labels=None):
     """
@@ -401,8 +442,9 @@ def predict_from_prompts(predictor, box=None, points=None, point_labels=None):
     )
     # Find and return points along contour of detected object
     contours = measure.find_contours(masks[0], 0.5)
-    sx, sy = contours[0][:,1], contours[0][:,0]
+    sx, sy = contours[0][:, 1], contours[0][:, 0]
     return sx, sy
+
 
 def find_overlapping_polygons(polygons, min_overlap=0.4):
     """
@@ -439,10 +481,11 @@ def find_overlapping_polygons(polygons, min_overlap=0.4):
                 if not poly2.is_valid:
                     poly2 = poly2.buffer(0)
                 if i != j and poly1.intersects(poly2)\
-                    and poly1.intersection(poly2).area > min_overlap*(min(poly1.area, poly2.area))\
-                    and (j, i) not in overlapping_polygons:
+                        and poly1.intersection(poly2).area > min_overlap * (min(poly1.area, poly2.area))\
+                        and (j, i) not in overlapping_polygons:
                     overlapping_polygons.append((i, j))
     return overlapping_polygons
+
 
 def Unet():
     """
@@ -457,59 +500,60 @@ def Unet():
     tf.keras.backend.clear_session()
 
     inputs = Input((256, 256, 3), name='input')
-    
-    conv1 = Conv2D(16, (3,3), activation='relu', padding = 'same')(inputs)
-    conv1 = Conv2D(16, (3,3), activation='relu', padding = 'same')(conv1)
+
+    conv1 = Conv2D(16, (3, 3), activation='relu', padding='same')(inputs)
+    conv1 = Conv2D(16, (3, 3), activation='relu', padding='same')(conv1)
     conv1 = BatchNormalization()(conv1)
 
     pool1 = MaxPooling2D(pool_size=(2, 2))(conv1)
-    conv2 = Conv2D(32, (3,3), activation='relu', padding = 'same')(pool1)
-    conv2 = Conv2D(32, (3,3), activation='relu', padding = 'same')(conv2)
+    conv2 = Conv2D(32, (3, 3), activation='relu', padding='same')(pool1)
+    conv2 = Conv2D(32, (3, 3), activation='relu', padding='same')(conv2)
     conv2 = BatchNormalization()(conv2)
 
     pool2 = MaxPooling2D(pool_size=(2, 2))(conv2)
-    conv3 = Conv2D(64, (3,3), activation='relu', padding = 'same')(pool2)
-    conv3 = Conv2D(64, (3,3), activation='relu', padding = 'same')(conv3)
+    conv3 = Conv2D(64, (3, 3), activation='relu', padding='same')(pool2)
+    conv3 = Conv2D(64, (3, 3), activation='relu', padding='same')(conv3)
     conv3 = BatchNormalization()(conv3)
 
     pool3 = MaxPooling2D(pool_size=(2, 2))(conv3)
-    conv4 = Conv2D(128, (3,3), activation='relu', padding = 'same')(pool3)
-    conv4 = Conv2D(128, (3,3), activation='relu', padding = 'same')(conv4)
+    conv4 = Conv2D(128, (3, 3), activation='relu', padding='same')(pool3)
+    conv4 = Conv2D(128, (3, 3), activation='relu', padding='same')(conv4)
     conv4 = BatchNormalization()(conv4)
 
     pool4 = MaxPooling2D(pool_size=(2, 2))(conv4)
-    conv5 = Conv2D(256, (3,3), activation='relu', padding = 'same')(pool4)
-    conv5 = Conv2D(256, (3,3), activation='relu', padding = 'same')(conv5)
+    conv5 = Conv2D(256, (3, 3), activation='relu', padding='same')(pool4)
+    conv5 = Conv2D(256, (3, 3), activation='relu', padding='same')(conv5)
     conv5 = BatchNormalization()(conv5)
 
-    up6 = Conv2DTranspose(128, (3, 3), strides = (2, 2), padding = 'same')(conv5)
+    up6 = Conv2DTranspose(128, (3, 3), strides=(2, 2), padding='same')(conv5)
     up6 = concatenate([up6, conv4])
-    conv6 = Conv2D(128, (3,3), activation='relu', padding = 'same')(up6)
-    conv6 = Conv2D(128, (3,3), activation='relu', padding = 'same')(conv6)
+    conv6 = Conv2D(128, (3, 3), activation='relu', padding='same')(up6)
+    conv6 = Conv2D(128, (3, 3), activation='relu', padding='same')(conv6)
     conv6 = BatchNormalization()(conv6)
 
-    up7 = Conv2DTranspose(64, (3, 3), strides = (2, 2), padding = 'same')(conv6)
+    up7 = Conv2DTranspose(64, (3, 3), strides=(2, 2), padding='same')(conv6)
     up7 = concatenate([up7, conv3])
-    conv7 = Conv2D(64, (3,3), activation='relu', padding = 'same')(up7)
-    conv7 = Conv2D(64, (3,3), activation='relu', padding = 'same')(conv7)
+    conv7 = Conv2D(64, (3, 3), activation='relu', padding='same')(up7)
+    conv7 = Conv2D(64, (3, 3), activation='relu', padding='same')(conv7)
     conv7 = BatchNormalization()(conv7)
 
-    up8 = Conv2DTranspose(32, (3, 3), strides = (2, 2), padding = 'same')(conv7)
+    up8 = Conv2DTranspose(32, (3, 3), strides=(2, 2), padding='same')(conv7)
     up8 = concatenate([up8, conv2])
-    conv8 = Conv2D(32, (3,3), activation='relu', padding = 'same')(up8)
-    conv8 = Conv2D(32, (3,3), activation='relu', padding = 'same')(conv8)
+    conv8 = Conv2D(32, (3, 3), activation='relu', padding='same')(up8)
+    conv8 = Conv2D(32, (3, 3), activation='relu', padding='same')(conv8)
     conv8 = BatchNormalization()(conv8)
 
-    up9 = Conv2DTranspose(16, (3, 3), strides = (2, 2), padding = 'same')(conv8)
+    up9 = Conv2DTranspose(16, (3, 3), strides=(2, 2), padding='same')(conv8)
     up9 = concatenate([up9, conv1])
-    conv9 = Conv2D(16, (3,3), activation='relu', padding = 'same')(up9)
-    conv9 = Conv2D(16, (3,3), activation='relu', padding = 'same')(conv9)
+    conv9 = Conv2D(16, (3, 3), activation='relu', padding='same')(up9)
+    conv9 = Conv2D(16, (3, 3), activation='relu', padding='same')(conv9)
     conv9 = BatchNormalization()(conv9)
 
-    conv10 = Conv2D(3, (1,1), activation='softmax')(conv9)
+    conv10 = Conv2D(3, (1, 1), activation='softmax')(conv9)
     model = Model(inputs=[inputs], outputs=[conv10])
 
     return model
+
 
 def weighted_crossentropy(y_true, y_pred):
     """
@@ -527,12 +571,15 @@ def weighted_crossentropy(y_true, y_pred):
     loss : tensor
         Weighted cross-entropy loss.
     """
-    class_weights = tf.constant([[[[0.6, 1.0, 5.0]]]]) # increase the weight on the grains and the grain boundaries
-    unweighted_losses = tf.nn.softmax_cross_entropy_with_logits(labels=y_true, logits=y_pred)
+    class_weights = tf.constant(
+        [[[[0.6, 1.0, 5.0]]]])  # increase the weight on the grains and the grain boundaries
+    unweighted_losses = tf.nn.softmax_cross_entropy_with_logits(
+        labels=y_true, logits=y_pred)
     weights = tf.reduce_sum(class_weights * y_true, axis=-1)
     weighted_losses = weights * unweighted_losses
     loss = tf.reduce_mean(weighted_losses)
     return loss
+
 
 def plot_images_and_labels(img, label):
     """
@@ -568,6 +615,7 @@ def plot_images_and_labels(img, label):
     ax3.set_xticks([])
     ax3.set_yticks([])
 
+
 def calculate_iou(poly1, poly2):
     """
     Calculate the Intersection over Union (IoU) between two polygons.
@@ -590,6 +638,7 @@ def calculate_iou(poly1, poly2):
     union_area = poly1.union(poly2).area
     iou = intersection_area / union_area
     return iou
+
 
 def pick_most_similar_polygon(polygons):
     """
@@ -618,6 +667,7 @@ def pick_most_similar_polygon(polygons):
     most_similar_index = avg_iou_scores.index(max(avg_iou_scores))
     most_similar_polygon = polygons[most_similar_index]
     return most_similar_polygon
+
 
 def sam_segmentation(sam, image, image_pred, coords, labels, min_area, plot_image=False, remove_edge_grains=False, remove_large_objects=False):
     """
@@ -663,15 +713,18 @@ def sam_segmentation(sam, image, image_pred, coords, labels, min_area, plot_imag
     predictor.set_image(image)
     all_grains = []
     print('creating masks using SAM...')
-    for i in trange(len(coords[:,0])):
-        x = coords[i,0]
-        y = coords[i,1]
+    for i in trange(len(coords[:, 0])):
+        x = coords[i, 0]
+        y = coords[i, 1]
         sx, sy, mask = one_point_prompt(x, y, image, predictor)
         if np.max(mask) > 0:
-            if remove_edge_grains and np.sum(np.hstack([mask[:4, :], mask[-4:, :], mask[:, :4].T, mask[:, -4:].T])) == 0: # if the mask is not touching too much the edge of the image
-                all_grains = collect_polygon_from_mask(labels, mask, image_pred, all_grains, sx, sy)
+            # if the mask is not touching too much the edge of the image
+            if remove_edge_grains and np.sum(np.hstack([mask[:4, :], mask[-4:, :], mask[:, :4].T, mask[:, -4:].T])) == 0:
+                all_grains = collect_polygon_from_mask(
+                    labels, mask, image_pred, all_grains, sx, sy)
             if not remove_edge_grains:
-                all_grains = collect_polygon_from_mask(labels, mask, image_pred, all_grains, sx, sy)
+                all_grains = collect_polygon_from_mask(
+                    labels, mask, image_pred, all_grains, sx, sy)
 
     print('finding overlapping polygons...')
     new_grains, comps, g = find_connected_components(all_grains, min_area)
@@ -683,32 +736,39 @@ def sam_segmentation(sam, image, image_pred, coords, labels, min_area, plot_imag
             nodes = []
             n_neighbors_before = []
             for node in g_small.nodes:
-                n_neighbors_before.append(len(list(nx.neighbors(g_small, node))))
+                n_neighbors_before.append(
+                    len(list(nx.neighbors(g_small, node))))
                 nodes.append(node)
-            
+
             edges_to_remove = []
             for edge in g_small.edges:
                 iou = calculate_iou(all_grains[edge[0]], all_grains[edge[1]])
-                if iou < 0.8: # probably this shouldn't be hardcoded!
+                if iou < 0.8:  # probably this shouldn't be hardcoded!
                     edges_to_remove.append(edge)
             for edge in edges_to_remove:
                 g_small.remove_edge(edge[0], edge[1])
-            
+
             n_neighbors_after = []
             for node in g_small.nodes:
-                n_neighbors_after.append(len(list(nx.neighbors(g_small, node))))
+                n_neighbors_after.append(
+                    len(list(nx.neighbors(g_small, node))))
             N_neighbors_before += n_neighbors_before
             N_neighbors_after += n_neighbors_after
             Nodes += nodes
 
-        classifications = classify_points(N_neighbors_before, N_neighbors_after, 10, 0, 60, 25)
+        classifications = classify_points(
+            N_neighbors_before, N_neighbors_after, 10, 0, 60, 25)
         if len(np.unique(classifications)) > 1:
-            cluster_0_mean = np.nanmean(np.array(N_neighbors_after)[np.array(classifications)==0])
-            cluster_1_mean = np.nanmean(np.array(N_neighbors_after)[np.array(classifications)==1])
-            if cluster_0_mean > cluster_1_mean: # the cluster with the larger number of neighbors after pruning the components is the one that we want to keep
-                all_grains = np.array(all_grains)[np.array(Nodes)[np.array(classifications)==0]]
+            cluster_0_mean = np.nanmean(np.array(N_neighbors_after)[
+                                        np.array(classifications) == 0])
+            cluster_1_mean = np.nanmean(np.array(N_neighbors_after)[
+                                        np.array(classifications) == 1])
+            if cluster_0_mean > cluster_1_mean:  # the cluster with the larger number of neighbors after pruning the components is the one that we want to keep
+                all_grains = np.array(all_grains)[np.array(
+                    Nodes)[np.array(classifications) == 0]]
             else:
-                all_grains = np.array(all_grains)[np.array(Nodes)[np.array(classifications)==1]]
+                all_grains = np.array(all_grains)[np.array(
+                    Nodes)[np.array(classifications) == 1]]
 
         all_grains = list(all_grains) + new_grains
 
@@ -716,29 +776,32 @@ def sam_segmentation(sam, image, image_pred, coords, labels, min_area, plot_imag
         new_grains, comps, g = find_connected_components(all_grains, min_area)
 
     print('finding best polygons...')
-    all_grains = merge_overlapping_polygons(all_grains, new_grains, comps, min_area, image_pred)
+    all_grains = merge_overlapping_polygons(
+        all_grains, new_grains, comps, min_area, image_pred)
     if len(all_grains) > 0:
         print('creating labeled image...')
         labels, mask_all = create_labeled_image(all_grains, image)
     else:
-        labels = np.zeros_like(image[:,:,0])
+        labels = np.zeros_like(image[:, :, 0])
         mask_all = np.zeros_like(image)
     if plot_image:
-        fig, ax = plt.subplots(figsize=(15,10))
+        fig, ax = plt.subplots(figsize=(15, 10))
         ax.imshow(image)
         plot_image_w_colorful_grains(image, all_grains, ax, cmap='Paired')
-        plot_grain_axes_and_centroids(all_grains, labels, ax, linewidth=1, markersize=10)
+        plot_grain_axes_and_centroids(
+            all_grains, labels, ax, linewidth=1, markersize=10)
         plt.xticks([])
         plt.yticks([])
         plt.xlim([0, np.shape(image)[1]])
         plt.ylim([np.shape(image)[0], 0])
         plt.tight_layout()
     else:
-        fig, ax = None, None                                                                    
-    props = regionprops_table(labels, intensity_image = image, properties=('label', 'area', 'centroid', 'major_axis_length', 'minor_axis_length', 
-                                                                                    'orientation', 'perimeter', 'max_intensity', 'mean_intensity', 'min_intensity'))
+        fig, ax = None, None
+    props = regionprops_table(labels, intensity_image=image, properties=('label', 'area', 'centroid', 'major_axis_length', 'minor_axis_length',
+                                                                         'orientation', 'perimeter', 'max_intensity', 'mean_intensity', 'min_intensity'))
     grain_data = pd.DataFrame(props)
     return all_grains, labels, mask_all, grain_data, fig, ax
+
 
 def collect_polygon_from_mask(labels, mask, image_pred, all_grains, sx, sy, min_area=100, max_n_large_grains=10, max_bg_fraction=0.7):
     """
@@ -771,14 +834,16 @@ def collect_polygon_from_mask(labels, mask, image_pred, all_grains, sx, sy, min_
         Updated list of polygons representing grains.
     """
     labels_in_mask = np.unique(labels[mask])
-    large_labels_in_mask = [label for label in labels_in_mask if len(labels[mask][labels[mask]==label]) >= min_area]
+    large_labels_in_mask = [label for label in labels_in_mask if len(
+        labels[mask][labels[mask] == label]) >= min_area]
     # skip masks that (1) cover too many objects of significant size in the Unet output and (2) masks that are mostly background:
-    if len(large_labels_in_mask) < max_n_large_grains and np.mean(image_pred[:,:,0][mask]) < max_bg_fraction:
+    if len(large_labels_in_mask) < max_n_large_grains and np.mean(image_pred[:, :, 0][mask]) < max_bg_fraction:
         poly = Polygon(np.vstack((sx, sy)).T)
         if not poly.is_valid:
             poly = poly.buffer(0)
         all_grains.append(poly)
     return all_grains
+
 
 def find_connected_components(all_grains, min_area):
     """
@@ -807,12 +872,13 @@ def find_connected_components(all_grains, min_area):
     for comp in comps:
         connected_grains.update(comp)
     new_grains = []
-    for i in range(len(all_grains)): # collect the objects that do not overlap each other
+    for i in range(len(all_grains)):  # collect the objects that do not overlap each other
         if i not in connected_grains and all_grains[i].area > min_area:
             if not all_grains[i].is_valid:
                 all_grains[i] = all_grains[i].buffer(0)
             new_grains.append(all_grains[i])
     return new_grains, comps, g
+
 
 def merge_overlapping_polygons(all_grains, new_grains, comps, min_area, image_pred):
     """
@@ -842,8 +908,8 @@ def merge_overlapping_polygons(all_grains, new_grains, comps, min_area, image_pr
     all_grains : list
         List of merged polygons.
     """
-    for j in trange(len(comps)): # deal with the overlapping objects, one connected component at a time
-        polygons = [] # polygons in the connected component
+    for j in trange(len(comps)):  # deal with the overlapping objects, one connected component at a time
+        polygons = []  # polygons in the connected component
         for i in comps[j]:
             polygons.append(all_grains[i])
         most_similar_polygon = pick_most_similar_polygon(polygons)
@@ -854,10 +920,10 @@ def merge_overlapping_polygons(all_grains, new_grains, comps, min_area, image_pr
                 diff_polygon = polygon.difference(most_similar_polygon)
                 if diff_polygon.area > min_area:
                     diff_raster = rasterize_grains([diff_polygon], image_pred)
-                    diff_grain = image_pred[diff_raster == 1][:,1]
+                    diff_grain = image_pred[diff_raster == 1][:, 1]
                     if len(diff_grain) > 0:
                         # if a large fraction of the pixels in the difference polygon are grains:
-                        if len(np.where(diff_grain > 0.5)[0])/len(diff_grain) > 0.1:
+                        if len(np.where(diff_grain > 0.5)[0]) / len(diff_grain) > 0.1:
                             diff_polys.append(diff_polygon)
         # deal with the cases when the difference polygons are MultiPolygons:
         polys = []
@@ -871,7 +937,7 @@ def merge_overlapping_polygons(all_grains, new_grains, comps, min_area, image_pr
             elif type(poly) == Polygon:
                 polys.append(poly)
         diff_polys = polys
-        # find the polygons that are not overlapping with the most similar polygon among the 
+        # find the polygons that are not overlapping with the most similar polygon among the
         # difference polygons and not overlapping too much with each other:
         selected_polygons = []
         if len(diff_polys) > 1:
@@ -887,9 +953,9 @@ def merge_overlapping_polygons(all_grains, new_grains, comps, min_area, image_pr
                     for poly in selected_polygons:
                         iou1s.append(calculate_iou(poly1, poly))
                         iou2s.append(calculate_iou(poly2, poly))
-                    if len(iou1s)>0:
+                    if len(iou1s) > 0:
                         iou1 = iou1s[np.argmax(iou1s)]
-                    if len(iou2s)>0:
+                    if len(iou2s) > 0:
                         iou2 = iou2s[np.argmax(iou2s)]
                     if iou1 < 0.1 and poly1.area > min_area:
                         selected_polygons.append(poly1)
@@ -898,7 +964,7 @@ def merge_overlapping_polygons(all_grains, new_grains, comps, min_area, image_pr
         elif len(diff_polys) == 1:
             if diff_polys[0].area > min_area:
                 selected_polygons = [diff_polys[0]]
-        opened_polygons = [] # get rid of thin grain margins that are not real grains
+        opened_polygons = []  # get rid of thin grain margins that are not real grains
         for poly in selected_polygons:
             erosion_distance = -5  # Negative value for erosion
             dilation_distance = 5  # Positive value for dilation
@@ -911,8 +977,9 @@ def merge_overlapping_polygons(all_grains, new_grains, comps, min_area, image_pr
             new_grains.append(most_similar_polygon)
         if len(selected_polygons) > 0:
             new_grains += selected_polygons
-    all_grains = new_grains # replace original list of polygons
+    all_grains = new_grains  # replace original list of polygons
     return all_grains
+
 
 def rasterize_grains(all_grains, image):
     """
@@ -931,14 +998,16 @@ def rasterize_grains(all_grains, image):
         The rasterized array of labels.
 
     """
-    labels = np.arange(1, len(all_grains)+1)
+    labels = np.arange(1, len(all_grains) + 1)
     # Combine polygons and labels into a tuple of (polygon, label) pairs
     shapes_with_labels = zip(all_grains, labels)
     # Define the shape and resolution of the rasterized output
     out_shape = image.shape[:2]  # Output array shape (height, width)
-    bounds = (-0.5, image.shape[0]-0.5, image.shape[1]-0.5, -0.5)  # Left, bottom, right, top of the array (bounding box)
+    # Left, bottom, right, top of the array (bounding box)
+    bounds = (-0.5, image.shape[0] - 0.5, image.shape[1] - 0.5, -0.5)
     # Define the transformation from pixel coordinates to spatial coordinates
-    transform = rasterio.transform.from_bounds(*bounds, out_shape[1], out_shape[0])
+    transform = rasterio.transform.from_bounds(
+        *bounds, out_shape[1], out_shape[0])
     # Rasterize the polygons into an array of labels
     rasterized = rasterize(
         ((poly, label) for poly, label in shapes_with_labels),
@@ -948,6 +1017,7 @@ def rasterize_grains(all_grains, image):
         dtype='int32'
     )
     return rasterized
+
 
 def create_labeled_image(all_grains, image):
     """
@@ -967,16 +1037,19 @@ def create_labeled_image(all_grains, image):
     mask_all : numpy.ndarray
         Binary mask indicating the presence of grains and their boundaries.
     """
-    rasterized = rasterize_grains(all_grains, image) # rasterize grains
+    rasterized = rasterize_grains(all_grains, image)  # rasterize grains
     boundaries = []
     for grain in all_grains:
         boundaries.append(grain.boundary.buffer(2))
-    boundaries_rasterized = rasterize_grains(boundaries, image) # rasterize grain boundaries
-    mask_all = np.zeros(image.shape[:-1]) # combine grains and grain boundaries into a single mask
+    boundaries_rasterized = rasterize_grains(
+        boundaries, image)  # rasterize grain boundaries
+    # combine grains and grain boundaries into a single mask
+    mask_all = np.zeros(image.shape[:-1])
     mask_all[rasterized > 0] = 1
     mask_all[boundaries_rasterized >= 1] = 2
     rasterized = rasterized.astype('int')
     return rasterized, mask_all
+
 
 def predict_large_image(fname, model, sam, min_area, patch_size=2000, overlap=300, remove_large_objects=False):
     """
@@ -1010,49 +1083,64 @@ def predict_large_image(fname, model, sam, min_area, patch_size=2000, overlap=30
     """
     step_size = patch_size - overlap  # step size for overlapping patches
     image = np.array(load_img(fname))
-    img_height, img_width = image.shape[:2]  # get the height and width of the image 
+    # get the height and width of the image
+    img_height, img_width = image.shape[:2]
     # loop over the image and extract patches:
     All_Grains = []
-    total_patches = ((img_height - patch_size + step_size) // step_size + 1) * ((img_width - patch_size + step_size) // step_size + 1)
+    total_patches = ((img_height - patch_size + step_size) // step_size + 1) * \
+        ((img_width - patch_size + step_size) // step_size + 1)
     # Initialize an array to store the Unet predictions for the entire image
     image_pred = np.zeros((img_height, img_width, 3), dtype=np.float32)
 
     for i in range(0, img_height - patch_size + step_size + 1, step_size):
         for j in range(0, img_width - patch_size + step_size + 1, step_size):
-            patch = image[i:min(i + patch_size, img_height), j:min(j + patch_size, img_width)]
-            patch_pred = predict_image(patch, model, I=256) # use the Unet model to predict the mask on the patch
-            
+            patch = image[i:min(i + patch_size, img_height),
+                          j:min(j + patch_size, img_width)]
+            # use the Unet model to predict the mask on the patch
+            patch_pred = predict_image(patch, model, I=256)
+
             # Define the weights for blending the overlapping regions
             weights = np.ones_like(patch_pred)
             if i > 0:
-                weights[:overlap, :] *= np.linspace(0, 1, overlap)[:, None, None]
+                weights[:overlap,
+                        :] *= np.linspace(0, 1, overlap)[:, None, None]
             if j > 0:
-                weights[:, :overlap] *= np.linspace(0, 1, overlap)[None, :, None]
+                weights[:,
+                        :overlap] *= np.linspace(0, 1, overlap)[None, :, None]
             if i + patch_size < img_height:
-                weights[-overlap:, :] *= np.linspace(1, 0, overlap)[:, None, None]
+                weights[-overlap:,
+                        :] *= np.linspace(1, 0, overlap)[:, None, None]
             if j + patch_size < img_width:
-                weights[:, -overlap:] *= np.linspace(1, 0, overlap)[None, :, None]
+                weights[:, -
+                        overlap:] *= np.linspace(1, 0, overlap)[None, :, None]
 
             # Update image_pred with the weighted sum
-            image_pred[i:min(i + patch_size, img_height), j:min(j + patch_size, img_width)] += patch_pred * weights
+            image_pred[i:min(i + patch_size, img_height), j:min(j +
+                                                                patch_size, img_width)] += patch_pred * weights
             labels, coords = label_grains(patch, patch_pred, dbs_max_dist=20.0)
-            if len(coords) > 0: # run the SAM algorithm only if there are grains in the patch
-                all_grains, labels, mask_all, grain_data, fig, ax = sam_segmentation(sam, patch, patch_pred, coords, labels, \
-                                    min_area=min_area, plot_image=False, remove_edge_grains=True, remove_large_objects=remove_large_objects)
+            if len(coords) > 0:  # run the SAM algorithm only if there are grains in the patch
+                all_grains, labels, mask_all, grain_data, fig, ax = sam_segmentation(sam, patch, patch_pred, coords, labels,
+                                                                                     min_area=min_area, plot_image=False, remove_edge_grains=True, remove_large_objects=remove_large_objects)
                 for grain in all_grains:
-                    All_Grains += [translate(grain, xoff=j, yoff=i)] # translate the grains to the original image coordinates
-            patch_num = i//step_size*((img_width - patch_size + step_size)//step_size + 1) + j//step_size + 1
+                    # translate the grains to the original image coordinates
+                    All_Grains += [translate(grain, xoff=j, yoff=i)]
+            patch_num = i // step_size * \
+                ((img_width - patch_size + step_size) //
+                 step_size + 1) + j // step_size + 1
             if len(coords) > 0:
-                coords[:,0] = coords[:,0] + j
-                coords[:,1] = coords[:,1] + i
+                coords[:, 0] = coords[:, 0] + j
+                coords[:, 1] = coords[:, 1] + i
                 if patch_num > 1:
                     all_coords = np.vstack((all_coords, coords))
                 else:
                     all_coords = coords.copy()
-            print(f"processed patch #{patch_num} out of {total_patches} patches")
+            print(
+                f"processed patch #{patch_num} out of {total_patches} patches")
     new_grains, comps, g = find_connected_components(All_Grains, min_area)
-    All_Grains = merge_overlapping_polygons(All_Grains, new_grains, comps, min_area, patch_pred)
+    All_Grains = merge_overlapping_polygons(
+        All_Grains, new_grains, comps, min_area, patch_pred)
     return All_Grains, image_pred, all_coords
+
 
 def load_and_preprocess(image_path, mask_path, augmentations=False):
     """
@@ -1092,15 +1180,22 @@ def load_and_preprocess(image_path, mask_path, augmentations=False):
     if augmentations:
         image = tf.image.random_brightness(image, max_delta=0.2)
         image = tf.image.random_contrast(image, lower=0.8, upper=1.2)
-        image = tf.where(image < 0, tf.zeros_like(image), image)  # clipping negative values
-        image = tf.where(image > 1, tf.ones_like(image), image)  # clipping values larger than 1
+        image = tf.where(image < 0, tf.zeros_like(image),
+                         image)  # clipping negative values
+        # clipping values larger than 1
+        image = tf.where(image > 1, tf.ones_like(image), image)
         seed = tf.random.uniform(shape=[], minval=0, maxval=1)
-        image = tf.cond(seed < 0.5, lambda: tf.image.flip_left_right(image), lambda: image)
-        mask = tf.cond(seed < 0.5, lambda: tf.image.flip_left_right(mask), lambda: mask)
-        image = tf.cond(seed < 0.5, lambda: tf.image.flip_up_down(image), lambda: image)
-        mask = tf.cond(seed < 0.5, lambda: tf.image.flip_up_down(mask), lambda: mask)
+        image = tf.cond(
+            seed < 0.5, lambda: tf.image.flip_left_right(image), lambda: image)
+        mask = tf.cond(
+            seed < 0.5, lambda: tf.image.flip_left_right(mask), lambda: mask)
+        image = tf.cond(
+            seed < 0.5, lambda: tf.image.flip_up_down(image), lambda: image)
+        mask = tf.cond(
+            seed < 0.5, lambda: tf.image.flip_up_down(mask), lambda: mask)
 
     return image, mask
+
 
 def onclick(event, ax, coords, image, predictor):
     """
@@ -1127,16 +1222,19 @@ def onclick(event, ax, coords, image, predictor):
     None
     """
     x, y = event.xdata, event.ydata
-    if event.button == 1: # left mouse button for object
+    if event.button == 1:  # left mouse button for object
         coords.append((x, y))
-        sx, sy, mask = one_point_prompt(coords[-1][0], coords[-1][1], image, predictor, ax=ax)
+        sx, sy, mask = one_point_prompt(
+            coords[-1][0], coords[-1][1], image, predictor, ax=ax)
         ax.figure.canvas.draw()
-    if event.button == 3: # right mouse button for background
+    if event.button == 3:  # right mouse button for background
         ax.patches[-1].remove()
         coords.append((x, y))
-        sx, sy = two_point_prompt(coords[-2][0], coords[-2][1], coords[-1][0], coords[-1][1], image, predictor, ax=ax)
+        sx, sy = two_point_prompt(
+            coords[-2][0], coords[-2][1], coords[-1][0], coords[-1][1], image, predictor, ax=ax)
         ax.figure.canvas.draw()
-        
+
+
 def onpress(event, ax, fig):
     """
     Handle key press events for deleting or merging polygons.
@@ -1151,22 +1249,24 @@ def onpress(event, ax, fig):
         The matplotlib Figure object.
     """
     sys.stdout.flush()
-    if event.key == 'x': # delete last polygon
+    if event.key == 'x':  # delete last polygon
         ax.patches[-1].remove()
         fig.canvas.draw()
-    if event.key == 'm': # merge last two polygons
+    if event.key == 'm':  # merge last two polygons
         path1 = ax.patches[-1].get_path()
         path2 = ax.patches[-2].get_path()
         poly = Polygon(path1.vertices).union(Polygon(path2.vertices))
         ax.patches[-1].remove()
         ax.patches[-1].remove()
         color = np.concatenate([np.random.random(3), np.array([0.6])], axis=0)
-        ax.fill(poly.exterior.xy[0], poly.exterior.xy[1], facecolor=color, edgecolor='k', alpha=0.5)
+        ax.fill(poly.exterior.xy[0], poly.exterior.xy[1],
+                facecolor=color, edgecolor='k', alpha=0.5)
         fig.canvas.draw()
-    if event.key == 'g': # make all polygons visible or invisible
+    if event.key == 'g':  # make all polygons visible or invisible
         for patch in ax.patches:
             patch.set_visible(not patch.get_visible())
         fig.canvas.draw()
+
 
 def onclick2(event, all_grains, grain_inds, ax, select_only=False):
     """
@@ -1191,8 +1291,10 @@ def onclick2(event, all_grains, grain_inds, ax, select_only=False):
         if all_grains[i].contains(point):
             grain_inds.append(i)
             if not select_only:
-                ax.fill(all_grains[i].exterior.xy[0], all_grains[i].exterior.xy[1], color='r', alpha=0.5)
+                ax.fill(all_grains[i].exterior.xy[0],
+                        all_grains[i].exterior.xy[1], color='r', alpha=0.5)
                 ax.figure.canvas.draw()
+
 
 def onpress2(event, all_grains, grain_inds, fig, ax):
     """
@@ -1212,12 +1314,12 @@ def onpress2(event, all_grains, grain_inds, fig, ax):
         The axes object.
     """
     sys.stdout.flush()
-    if event.key == 'x': # delete last polygon
+    if event.key == 'x':  # delete last polygon
         ax.patches[-1].remove()
         ax.patches[grain_inds[-1]].remove()
         all_grains.remove(all_grains[grain_inds[-1]])
         fig.canvas.draw()
-    if event.key == 'm': # merge last two polygons
+    if event.key == 'm':  # merge last two polygons
         path1 = ax.patches[-1].get_path()
         path2 = ax.patches[-2].get_path()
         poly = Polygon(path1.vertices).union(Polygon(path2.vertices))
@@ -1228,21 +1330,22 @@ def onpress2(event, all_grains, grain_inds, fig, ax):
         if grain_inds[-2] < grain_inds[-1]:
             ax.patches[grain_inds[-2]].remove()
         else:
-            ax.patches[grain_inds[-2]-1].remove()
+            ax.patches[grain_inds[-2] - 1].remove()
         all_grains.remove(all_grains[grain_inds[-1]])
         if grain_inds[-2] < grain_inds[-1]:
             all_grains.remove(all_grains[grain_inds[-2]])
         else:
-            all_grains.remove(all_grains[grain_inds[-2]-1])
+            all_grains.remove(all_grains[grain_inds[-2] - 1])
         all_grains.append(poly)  # add merged polygon to 'all_grains'
         color = np.concatenate([np.random.random(3), np.array([0.6])], axis=0)
-        ax.fill(poly.exterior.xy[0], poly.exterior.xy[1], 
+        ax.fill(poly.exterior.xy[0], poly.exterior.xy[1],
                 facecolor=color, edgecolor='k', linewidth=2, alpha=0.5)
         fig.canvas.draw()
-    if event.key == 'g': # make all polygons visible or invisible
+    if event.key == 'g':  # make all polygons visible or invisible
         for patch in ax.patches:
             patch.set_visible(not patch.get_visible())
         fig.canvas.draw()
+
 
 def extract_patch(image, center, patch_size):
     """
@@ -1271,6 +1374,7 @@ def extract_patch(image, center, patch_size):
     patch = image[y_start:y_end, x_start:x_end]
     return patch, (x_start, y_start)
 
+
 def convert_to_large_image_coords(sx, sy, patch_origin):
     """
     Convert the coordinates from the patch to the large image.
@@ -1293,6 +1397,7 @@ def convert_to_large_image_coords(sx, sy, patch_origin):
     x_large = x_start + sx
     y_large = y_start + sy
     return x_large, y_large
+
 
 def onclick_large_image(event, ax, coords, image, predictor, patch_size=1000):
     """
@@ -1320,27 +1425,36 @@ def onclick_large_image(event, ax, coords, image, predictor, patch_size=1000):
     - The function updates the display with the segmented region.
     """
     x, y = event.xdata, event.ydata
-    if event.button == 1: # left mouse button for object
+    if event.button == 1:  # left mouse button for object
         coords.append((x, y))
-        patch, patch_origin = extract_patch(image, (int(np.round(coords[-1][0])), int(np.round(coords[-1][1]))), patch_size)
+        patch, patch_origin = extract_patch(
+            image, (int(np.round(coords[-1][0])), int(np.round(coords[-1][1]))), patch_size)
         predictor.set_image(patch)
-        sx, sy, mask = one_point_prompt(coords[-1][0]-patch_origin[0], coords[-1][1]-patch_origin[1], patch, predictor, ax=False)
+        sx, sy, mask = one_point_prompt(
+            coords[-1][0] - patch_origin[0], coords[-1][1] - patch_origin[1], patch, predictor, ax=False)
         x_large, y_large = convert_to_large_image_coords(sx, sy, patch_origin)
         if len(x_large) > 0:
-            color = np.concatenate([np.random.random(3), np.array([0.6])], axis=0)
-            ax.fill(x_large, y_large, facecolor=color, edgecolor='k', alpha=0.5)
+            color = np.concatenate(
+                [np.random.random(3), np.array([0.6])], axis=0)
+            ax.fill(x_large, y_large, facecolor=color,
+                    edgecolor='k', alpha=0.5)
             ax.figure.canvas.draw()
-    if event.button == 3: # right mouse button for background
+    if event.button == 3:  # right mouse button for background
         ax.patches[-1].remove()
         coords.append((x, y))
-        patch, patch_origin = extract_patch(image, (int(np.round(coords[-1][0])), int(np.round(coords[-1][1]))), patch_size)
+        patch, patch_origin = extract_patch(
+            image, (int(np.round(coords[-1][0])), int(np.round(coords[-1][1]))), patch_size)
         predictor.set_image(patch)
-        sx, sy = two_point_prompt(coords[-2][0]-patch_origin[0], coords[-2][1]-patch_origin[1], coords[-1][0]-patch_origin[0], coords[-1][1]-patch_origin[1], patch, predictor, ax=False)
+        sx, sy = two_point_prompt(coords[-2][0] - patch_origin[0], coords[-2][1] - patch_origin[1],
+                                  coords[-1][0] - patch_origin[0], coords[-1][1] - patch_origin[1], patch, predictor, ax=False)
         x_large, y_large = convert_to_large_image_coords(sx, sy, patch_origin)
         if len(x_large) > 0:
-            color = np.concatenate([np.random.random(3), np.array([0.6])], axis=0)
-            ax.fill(x_large, y_large, facecolor=color, edgecolor='k', alpha=0.5)
+            color = np.concatenate(
+                [np.random.random(3), np.array([0.6])], axis=0)
+            ax.fill(x_large, y_large, facecolor=color,
+                    edgecolor='k', alpha=0.5)
             ax.figure.canvas.draw()
+
 
 def click_for_scale(event, ax):
     """
@@ -1355,17 +1469,18 @@ def click_for_scale(event, ax):
         The matplotlib Axes object representing the plot.
     """
     global x1, x2, y1, y2, dist
-    if event.button == 1: # left mouse button for start point of scale
+    if event.button == 1:  # left mouse button for start point of scale
         x1, y1 = event.xdata, event.ydata
         ax.plot(x1, y1, 'ro')
         ax.figure.canvas.draw()
-    if event.button == 3: # right mouse button for end point of scale
+    if event.button == 3:  # right mouse button for end point of scale
         x2, y2 = event.xdata, event.ydata
         ax.plot(x2, y2, 'ro')
         ax.plot([x1, x2], [y1, y2], 'r')
         ax.figure.canvas.draw()
         dist = ((x2 - x1)**2 + (y2 - y1)**2)**0.5
         print('number of pixels: ' + str(np.round(dist, 2)))
+
 
 def get_grains_from_patches(ax, image, plotting=False):
     """
@@ -1393,8 +1508,8 @@ def get_grains_from_patches(ax, image, plotting=False):
     """
     all_grains = []
     for i in trange(len(ax.patches)):
-        x = ax.patches[i].get_path().vertices[:,0]
-        y = ax.patches[i].get_path().vertices[:,1]
+        x = ax.patches[i].get_path().vertices[:, 0]
+        y = ax.patches[i].get_path().vertices[:, 1]
         all_grains.append(Polygon(np.vstack((x, y)).T))
 
     ol_polys = find_overlapping_polygons(all_grains)
@@ -1407,7 +1522,7 @@ def get_grains_from_patches(ax, image, plotting=False):
     polys_to_remove.sort(reverse=True)
     for ind in polys_to_remove:
         all_grains.remove(all_grains[ind])
-        
+
     # create labeled image
     rasterized = rasterize_grains(all_grains, image)
     boundaries = []
@@ -1425,9 +1540,10 @@ def get_grains_from_patches(ax, image, plotting=False):
         ax.imshow(image)
         ax.imshow(mask_all, alpha=0.5)
         for i in trange(len(all_grains)):
-            ax.fill(all_grains[i].exterior.xy[0], all_grains[i].exterior.xy[1], 
-                    facecolor=(0,0,1), edgecolor='none', linewidth=0.5, alpha=0.4)
+            ax.fill(all_grains[i].exterior.xy[0], all_grains[i].exterior.xy[1],
+                    facecolor=(0, 0, 1), edgecolor='none', linewidth=0.5, alpha=0.4)
     return all_grains, rasterized, mask_all
+
 
 def plot_image_w_colorful_grains(image, all_grains, ax, cmap='viridis', plot_image=True, im_alpha=1.0):
     """
@@ -1461,15 +1577,16 @@ def plot_image_w_colorful_grains(image, all_grains, ax, cmap='viridis', plot_ima
         ax.imshow(image, alpha=im_alpha)
     for i in trange(len(all_grains)):
         color = colors[i]
-        ax.fill(all_grains[i].exterior.xy[0], all_grains[i].exterior.xy[1], 
+        ax.fill(all_grains[i].exterior.xy[0], all_grains[i].exterior.xy[1],
                 facecolor=color, edgecolor='none', linewidth=1, alpha=0.5)
-        ax.plot(all_grains[i].exterior.xy[0], all_grains[i].exterior.xy[1], 
+        ax.plot(all_grains[i].exterior.xy[0], all_grains[i].exterior.xy[1],
                 color='k', linewidth=1)
     ax.set_xticks([])
     ax.set_yticks([])
     ax.set_xlim(0, image.shape[1])
     ax.set_ylim(image.shape[0], 0)
     plt.tight_layout()
+
 
 def plot_grain_axes_and_centroids(all_grains, labels, ax, linewidth=1, markersize=10):
     """
@@ -1493,7 +1610,7 @@ def plot_grain_axes_and_centroids(all_grains, labels, ax, linewidth=1, markersiz
     None
     """
     regions = regionprops(labels.astype('int'))
-    for ind in range(len(all_grains)-1):
+    for ind in range(len(all_grains) - 1):
         y0, x0 = regions[ind].centroid
         orientation = regions[ind].orientation
         x1 = x0 + np.cos(orientation) * 0.5 * regions[ind].minor_axis_length
@@ -1503,6 +1620,7 @@ def plot_grain_axes_and_centroids(all_grains, labels, ax, linewidth=1, markersiz
         ax.plot((x0, x1), (y0, y1), '-k', linewidth=linewidth)
         ax.plot((x0, x2), (y0, y2), '-k', linewidth=linewidth)
         ax.plot(x0, y0, '.k', markersize=markersize)
+
 
 def classify_points(feature1, feature2, x1, y1, x2, y2):
     """
@@ -1547,7 +1665,8 @@ def classify_points(feature1, feature2, x1, y1, x2, y2):
             classifications.append(0)  # On the line
     return classifications
 
-def compute_curvature(x,y):
+
+def compute_curvature(x, y):
     """
     Compute first derivatives and curvature of a curve.
 
@@ -1563,12 +1682,13 @@ def compute_curvature(x,y):
     curvature : 1D array
         curvature of the curve (in 1/units of x and y)
     """
-    dx = np.gradient(x) # first derivatives
-    dy = np.gradient(y)      
-    ddx = np.gradient(dx) # second derivatives 
-    ddy = np.gradient(dy) 
-    curvature = (dx*ddy-dy*ddx)/((dx**2+dy**2)**1.5)
+    dx = np.gradient(x)  # first derivatives
+    dy = np.gradient(y)
+    ddx = np.gradient(dx)  # second derivatives
+    ddy = np.gradient(dy)
+    curvature = (dx * ddy - dy * ddx) / ((dx**2 + dy**2)**1.5)
     return curvature
+
 
 def patchify_training_data(input_dir, patch_dir):
     """
@@ -1601,7 +1721,8 @@ def patchify_training_data(input_dir, patch_dir):
     labels = sorted(glob(input_dir + "*mask*"))
 
     if not images or not labels:
-        print(f"Warning: No files containing 'image' or 'mask' found in {input_dir}.")
+        print(
+            f"Warning: No files containing 'image' or 'mask' found in {input_dir}.")
         return
 
     # Create directories for patches
@@ -1631,7 +1752,7 @@ def patchify_training_data(input_dir, patch_dir):
         patches = tf.reshape(patches, [-1, 256, 256, 3])
         # Write patches to files
         for i in range(patches.shape[0]):
-            im = np.asarray(patches[i,:,:,:]).astype('uint8')
+            im = np.asarray(patches[i, :, :, :]).astype('uint8')
             imname = os.path.join(images_dir, 'im%03d.png' % (start_no + i))
             im = Image.fromarray(im.astype(np.uint8))
             im.save(imname)
@@ -1643,7 +1764,8 @@ def patchify_training_data(input_dir, patch_dir):
         large_image = load_img(image)
         # Convert the image to a tensor
         large_image = tf.keras.preprocessing.image.img_to_array(large_image)
-        large_image = large_image[:,:,0,np.newaxis] # only keep one layer and add a new axis
+        # only keep one layer and add a new axis
+        large_image = large_image[:, :, 0, np.newaxis]
         # Reshape the tensor to have a batch size of 1
         large_image = tf.reshape(large_image, [1, *large_image.shape])
         # Extract patches from the large image
@@ -1658,12 +1780,13 @@ def patchify_training_data(input_dir, patch_dir):
         patches = tf.reshape(patches, [-1, 256, 256, 1])
         # Write patches to files
         for i in range(patches.shape[0]):
-            im = np.asarray(patches[i,:,:,0]).astype('uint8')
+            im = np.asarray(patches[i, :, :, 0]).astype('uint8')
             imname = os.path.join(labels_dir, 'im%03d.png' % (start_no + i))
             im = Image.fromarray(im.astype(np.uint8))
             im.save(imname)
         start_no = start_no + patches.shape[0]
     return images_dir, labels_dir
+
 
 def create_train_val_test_data(image_dir, mask_dir, augmentation=True):
     """
@@ -1699,32 +1822,42 @@ def create_train_val_test_data(image_dir, mask_dir, augmentation=True):
         image_files,
         mask_files,
         test_size=0.15,  # 15% of the data for testing
-        random_state=42  
+        random_state=42
     )
     # Then split the training + validation set into training and validation sets
     train_images, val_images, train_masks, val_masks = train_test_split(
         train_val_images,
         train_val_masks,
         test_size=0.25,  # 25% of the remaining data for validation
-        random_state=42  
+        random_state=42
     )
 
     if not augmentation:
-        train_dataset = tf.data.Dataset.from_tensor_slices((train_images, train_masks))
+        train_dataset = tf.data.Dataset.from_tensor_slices(
+            (train_images, train_masks))
     else:
-        train_dataset = tf.data.Dataset.from_tensor_slices((train_images, train_masks, tf.Variable([True] * len(train_images), dtype=tf.bool)))
-    train_dataset = train_dataset.map(load_and_preprocess, num_parallel_calls=tf.data.AUTOTUNE)
-    train_dataset = train_dataset.shuffle(shuffle_buffer_size).batch(batch_size).prefetch(tf.data.AUTOTUNE)
+        train_dataset = tf.data.Dataset.from_tensor_slices(
+            (train_images, train_masks, tf.Variable([True] * len(train_images), dtype=tf.bool)))
+    train_dataset = train_dataset.map(
+        load_and_preprocess, num_parallel_calls=tf.data.AUTOTUNE)
+    train_dataset = train_dataset.shuffle(shuffle_buffer_size).batch(
+        batch_size).prefetch(tf.data.AUTOTUNE)
 
     val_dataset = tf.data.Dataset.from_tensor_slices((val_images, val_masks))
-    val_dataset = val_dataset.map(load_and_preprocess, num_parallel_calls=tf.data.AUTOTUNE)
-    val_dataset = val_dataset.shuffle(shuffle_buffer_size).batch(batch_size).prefetch(tf.data.AUTOTUNE)
+    val_dataset = val_dataset.map(
+        load_and_preprocess, num_parallel_calls=tf.data.AUTOTUNE)
+    val_dataset = val_dataset.shuffle(shuffle_buffer_size).batch(
+        batch_size).prefetch(tf.data.AUTOTUNE)
 
-    test_dataset = tf.data.Dataset.from_tensor_slices((test_images, test_masks))
-    test_dataset = test_dataset.map(load_and_preprocess, num_parallel_calls=tf.data.AUTOTUNE)
-    test_dataset = test_dataset.shuffle(shuffle_buffer_size).batch(batch_size).prefetch(tf.data.AUTOTUNE)
+    test_dataset = tf.data.Dataset.from_tensor_slices(
+        (test_images, test_masks))
+    test_dataset = test_dataset.map(
+        load_and_preprocess, num_parallel_calls=tf.data.AUTOTUNE)
+    test_dataset = test_dataset.shuffle(shuffle_buffer_size).batch(
+        batch_size).prefetch(tf.data.AUTOTUNE)
 
     return train_dataset, val_dataset, test_dataset
+
 
 def create_and_train_model(train_dataset, val_dataset, test_dataset, model_file=None, epochs=100):
     """
@@ -1753,12 +1886,15 @@ def create_and_train_model(train_dataset, val_dataset, test_dataset, model_file=
     The function will plot the training and validation loss and accuracy over epochs.
     """
     if model_file:
-        model = load_model(model_file, custom_objects={'weighted_crossentropy': weighted_crossentropy})
+        model = load_model(model_file, custom_objects={
+                           'weighted_crossentropy': weighted_crossentropy})
     else:
         model = Unet()
-        model.compile(optimizer=Adam(), loss=weighted_crossentropy, metrics=["accuracy"])
-    history = model.fit(train_dataset, epochs=epochs, validation_data=val_dataset)
-    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(12,5))
+        model.compile(optimizer=Adam(),
+                      loss=weighted_crossentropy, metrics=["accuracy"])
+    history = model.fit(train_dataset, epochs=epochs,
+                        validation_data=val_dataset)
+    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(12, 5))
     axes[0].plot(history.history['loss'])
     axes[0].plot(history.history['val_loss'])
     axes[0].set_xlabel('epoch')
@@ -1769,6 +1905,7 @@ def create_and_train_model(train_dataset, val_dataset, test_dataset, model_file=
     axes[1].set_ylabel('accuracy')
     model.evaluate(test_dataset)
     return model
+
 
 def save_polygons(polygons, fname):
     """
@@ -1793,13 +1930,15 @@ def save_polygons(polygons, fname):
     for polygon in polygons:
         feature = {
             "type": "Feature",
-            "geometry": mapping(polygon),  # Convert Shapely polygon to GeoJSON format
+            # Convert Shapely polygon to GeoJSON format
+            "geometry": mapping(polygon),
             "properties": {}
         }
         geojson_data["features"].append(feature)
     # Save to a file
     with open(fname, 'w') as f:
         json.dump(geojson_data, f)
+
 
 def read_polygons(fname):
     """
@@ -1822,19 +1961,21 @@ def read_polygons(fname):
     polygons = []
     for feature in geojson_data['features']:
         geometry = feature['geometry']
-        polygons.append(shape(geometry))  # Convert GeoJSON geometry to Shapely Polygon
+        # Convert GeoJSON geometry to Shapely Polygon
+        polygons.append(shape(geometry))
     return polygons
+
 
 def get_area_weighted_distribution(grain_sizes, areas):
     area_weighted_grain_size = []
     mean_area = np.mean(areas)
     for i in range(len(grain_sizes)):
-        for j in range(int(areas[i]/(0.5*mean_area))):
+        for j in range(int(areas[i] / (0.5 * mean_area))):
             area_weighted_grain_size.append(grain_sizes[i])
     return area_weighted_grain_size
 
-def plot_histogram_of_axis_lengths(major_axis_length, minor_axis_length, area=[], binsize=0.1, xlimits=None):
 
+def plot_histogram_of_axis_lengths(major_axis_length, minor_axis_length, area=[], binsize=0.1, xlimits=None):
     """
     Plots a histogram of the major and minor axis lengths in phi scale.
 
@@ -1858,10 +1999,12 @@ def plot_histogram_of_axis_lengths(major_axis_length, minor_axis_length, area=[]
     ax : matplotlib.axes._subplots.AxesSubplot
         The axes object containing the plot.
     """
-    if len(area)>0:
-        major_axis_length = get_area_weighted_distribution(major_axis_length, area)
-        minor_axis_length = get_area_weighted_distribution(minor_axis_length, area)
-    phi_major = -np.log2(major_axis_length) # major axis length in phi scale
+    if len(area) > 0:
+        major_axis_length = get_area_weighted_distribution(
+            major_axis_length, area)
+        minor_axis_length = get_area_weighted_distribution(
+            minor_axis_length, area)
+    phi_major = -np.log2(major_axis_length)  # major axis length in phi scale
     phi_minor = -np.log2(minor_axis_length)
     if xlimits:
         phi_max = int(np.ceil(-np.log2(xlimits[0])))
@@ -1869,45 +2012,57 @@ def plot_histogram_of_axis_lengths(major_axis_length, minor_axis_length, area=[]
     else:
         phi_max = int(np.ceil(max(np.max(phi_minor), np.max(phi_major))))
         phi_min = int(np.floor(min(np.min(phi_minor), np.min(phi_major))))
-    fig, ax = plt.subplots(figsize=(8,6))
-    n, bins, patches = plt.hist(phi_major, np.arange(phi_min, phi_max, binsize), alpha=0.5, zorder=2)
+    fig, ax = plt.subplots(figsize=(8, 6))
+    n, bins, patches = plt.hist(phi_major, np.arange(
+        phi_min, phi_max, binsize), alpha=0.5, zorder=2)
     ax.hist(phi_minor, np.arange(phi_min, phi_max, binsize), alpha=0.5)
-    y_loc = max(n) - 0.2*max(n)
+    y_loc = max(n) - 0.2 * max(n)
     grain_size_classes = {
         'very fine silt': [7, 8], 'fine silt': [6, 7], 'medium silt': [5, 6], 'coarse silt': [4, 5],
         'very fine sand': [3, 4], 'fine sand': [2, 3], 'medium sand': [1, 2], 'coarse sand': [0, 1],
         'very coarse sand': [-1, 0], 'granule': [-2, -1], 'pebble': [-6, -2], 'cobble': [-8, -6], 'boulder': [-12, -8]
     }
-    matching_classes, bounds = find_grain_size_classes(grain_size_classes, phi_min, phi_max)
+    matching_classes, bounds = find_grain_size_classes(
+        grain_size_classes, phi_min, phi_max)
     bounds = np.array(sorted(bounds)[::-1])
     if xlimits:
         bounds = bounds[(bounds >= phi_min) & (bounds <= phi_max)]
-    for i in range(len(bounds)-1):
-            ax.text(bounds[i]*0.5 + bounds[i+1]*0.5 + 0.05, y_loc, matching_classes[i], rotation='vertical')
-            ax.plot([bounds[i], bounds[i]], [0, max(n)+0.1*max(n)], 'k', linewidth=0.3)
+    for i in range(len(bounds) - 1):
+        ax.text(bounds[i] * 0.5 + bounds[i + 1] * 0.5 + 0.05,
+                y_loc, matching_classes[i], rotation='vertical')
+        ax.plot([bounds[i], bounds[i]], [
+                0, max(n) + 0.1 * max(n)], 'k', linewidth=0.3)
     if xlimits:
         ax.set_xlim(phi_max, phi_min)
-    else:
+    elif bounds:
         ax.set_xlim(bounds[0], bounds[-1])
-    ax.set_ylim(0, max(n) + 0.1*max(n))
-    ax.set_xticks(np.arange(bounds[-1], bounds[0]+1))
-    ax.set_xticklabels([np.round(2**i, 3) for i in range(-bounds[-1], -bounds[0]-1, -1)])
-    ax.set_xlabel('grain axis length (mm)')
+    ax.set_ylim(0, max(n) + 0.1 * max(n))
+    if bounds:
+        ax.set_xticks(np.arange(bounds[-1], bounds[0] + 1))
+        ax.set_xticklabels(
+            [np.round(2**i, 3) for i in range(-bounds[-1], -bounds[0] - 1, -1)])
+        ax.set_xlabel('grain axis length (mm)')
     ax.set_ylabel('count')
     ax2 = ax.twiny()
     ax2.set_xlim(ax.get_xlim())
-    ax2.set_xticks(bounds)
-    ax2.set_xticklabels([i for i in bounds])
-    ax2.set_xlabel('phi scale')
+    if bounds:
+        ax2.set_xticks(bounds)
+        ax2.set_xticklabels([i for i in bounds])
+        ax2.set_xlabel('phi scale')
     phi_major_sorted = np.sort(phi_major)
-    ecdf_major = np.arange(1, len(phi_major_sorted) + 1) / len(phi_major_sorted)
+    ecdf_major = np.arange(1, len(phi_major_sorted) +
+                           1) / len(phi_major_sorted)
     phi_minor_sorted = np.sort(phi_minor)
-    ecdf_minor = np.arange(1, len(phi_minor_sorted) + 1) / len(phi_minor_sorted)
+    ecdf_minor = np.arange(1, len(phi_minor_sorted) +
+                           1) / len(phi_minor_sorted)
     ax3 = ax.twinx()
-    ax3.plot(phi_major_sorted, ecdf_major[::-1], color='tab:blue', linewidth=2, zorder=3)
-    ax3.plot(phi_minor_sorted, ecdf_minor[::-1], color='tab:orange', linewidth=2, zorder=3)
+    ax3.plot(phi_major_sorted, ecdf_major[::-1],
+             color='tab:blue', linewidth=2, zorder=3)
+    ax3.plot(phi_minor_sorted, ecdf_minor[::-1],
+             color='tab:orange', linewidth=2, zorder=3)
     ax3.set_ylim(0, 1)
     return fig, ax
+
 
 def find_grain_size_classes(grain_size_classes, value1, value2, xlimits=None):
     """
