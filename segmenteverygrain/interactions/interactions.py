@@ -1,3 +1,6 @@
+# Standard imports
+import copy
+# Pip imports
 from PIL import Image
 import keras.utils
 import logging
@@ -9,11 +12,12 @@ import matplotlib.widgets as mwidgets
 import numpy as np
 import pandas as pd
 import rasterio.features
-import segmenteverygrain
+import segment_anything
 import shapely
 import skimage
 from tqdm import tqdm
-
+# Local imports
+import segmenteverygrain
 
 # Images larger than this will be downscaled
 # 4k resolution is (2160, 4096)
@@ -50,21 +54,23 @@ class Grain(object):
                 setattr(new_grain, k, copy.deepcopy(v, memo))
         return new_grain
 
+    def __init__(self, xy: np.ndarray, image: np.ndarray = None):
         '''
         Parameters
         ----------
         xy : list of (x, y) tuples
             Coordinates to draw this grain as a polygon.
-        data : pd.Series (optional)
-            Row from a DataFrame containing information about this grain. 
+        image : np.ndarray (optional)
+            Image in which grain was detected. Used to measure color info.
         '''
 
         # Input
-        self.data = data
+        self.image = image
         self.xy = np.array(xy)
 
-        # Grain properties to calculate (skimage)
-        # {name: dimensionality}
+        # Metrics
+        self.data = None
+        # Metrics to calculate {name: dimensionality, for unit conversion}
         self.region_props = {
             'area': 2,
             'centroid': 0,
@@ -86,6 +92,7 @@ class Grain(object):
             'alpha': 1.0,
             'facecolor': 'lime'
         }
+        self.axes = []
         self.patch = None
         self.selected = False
 
@@ -96,27 +103,29 @@ class Grain(object):
 
         Returns
         -------
-        poly : shapely.Polygon
+        shapely.Polygon
             Polygon representing the boundaries of this grain.
         '''
-        poly = shapely.Polygon(self.xy.T)
-        return poly
+        return shapely.Polygon(self.xy.T)
 
-    def measure(self, image: np.ndarray, raster: bool = False) -> pd.Series:
+    def measure(self, raster: bool = False) -> pd.Series:
         '''
         Calculate grain information from image and matplotlib patch.
         Overwrites self.data.
 
         Parameters
         ----------
-        image : np.ndarray
-            Background image, used to calculate region intensity in self.data.
+        raster : bool
+            Whether to use the "old" method of measuring grain properties.
+            If True, will measure all properties from a raster representation.
+            If False, will prefer measurements directly from grain coords.
 
         Returns
         -------
         self.data : pd.Series
             Row for a DataFrame containing computed grain info.
         '''
+        image = self.image
         poly = self.polygon
         props = self.region_props.keys()
         # Old method
@@ -134,9 +143,8 @@ class Grain(object):
                 # TODO: Diagnose why this happens sometimes
                 logger.error(f'MEASURE ERROR {pd.DataFrame(data)}')
                 data = pd.Series()
-        # New method
+        # New method, formatted to match output of old method
         else:
-            # Format grain data to match skimage.regionprops output
             data = {}
             # Size and location
             poly_metrics = measure_polygon(poly)
@@ -146,66 +154,55 @@ class Grain(object):
                 data['centroid-0'], data['centroid-1'] = poly_metrics['centroid']
             if 'perimeter' in props:
                 data['perimeter'] = poly.length
-            # Orientation of ellipse with same second moments as the polygon
-            # (i.e. the best-fit ellipse)
-            ellipse_metrics = measure_ellipse(poly_metrics)
-            if 'major_axis_length' in props:
-                data['major_axis_length'] = ellipse_metrics['major_axis_length']
-            if 'minor_axis_length' in props:
-                data['minor_axis_length'] = ellipse_metrics['minor_axis_length']
-            if 'orientation' in props:
-                data['orientation'] = ellipse_metrics['orientation']
-            # Color information
-            color_metrics = measure_colors(image, poly)
-            if 'max_intensity' in props:
-                data['max_intensity-0'] = color_metrics['max_intensity-0']
-                data['max_intensity-1'] = color_metrics['max_intensity-1']
-                data['max_intensity-2'] = color_metrics['max_intensity-2']
-            if 'min_intensity' in props:
-                data['min_intensity-0'] = color_metrics['min_intensity-0']
-                data['min_intensity-1'] = color_metrics['min_intensity-1']
-                data['min_intensity-2'] = color_metrics['min_intensity-2']
-            if 'mean_intensity' in props:
-                data['mean_intensity-0'] = color_metrics['mean_intensity-0']
-                data['mean_intensity-1'] = color_metrics['mean_intensity-1']
-                data['mean_intensity-2'] = color_metrics['mean_intensity-2']
+            # Orientation and major/minor axes of best-fit ellipse
+            for k, v in measure_ellipse(poly_metrics).items():
+                if k in props:
+                    data[k] = v
+            # Color information (mean, max, min of each channel)
+            if isinstance(image, np.ndarray):
+                for k, v in measure_color(image, poly).items():
+                    if k[:-2] in props:
+                        data[k] = v
             # Convert to row of pd.DataFrame
             data = pd.Series(data)
         # Save and return results
         self.data = data
         return data
 
-    def rescale(self, scale: float, save: bool = True) -> pd.Series:
+    def convert_units(self, scale: float) -> pd.Series:
         '''
-        Scale polygon coordinates and measurements by given scale factor.
+        Return grian measurements scaled by a given factor.
 
         Parameters
         ----------
         scale : float
             Factor by which to scale grain properties.
-        save : bool, default True
-            Whether to save the results (True) or just return them (False).
 
         Returns
         -------
         data : pd.Series
             Rescaled grain measurements.
         '''
-        # Convert coordinates
-        if save:
-            self.xy *= scale
-        # Convert data
+        # Skip if no measurement data exists
         if type(self.data) is type(None):
             return
-        data = self.data if save else self.data.copy()
         # For each type of measured value,
+        data = self.data.copy()
         for k, dim in self.region_props.items():
             # If the value has any length dimensions associated with it
             if dim:
-                # Scale those values according to their length dimensions
+                # Scale those values by the number of length dimensions
                 for col in [c for c in data.keys() if k in c]:
                     data[col] *= scale ** dim
         return data
+
+    def erase(self):
+        ''' Remove plot representation. '''
+        # Remove patch
+        self.patch.remove()
+        # Remove axes, if drawn
+        for a in self.axes:
+            a.remove()
 
     def select(self) -> bool:
         '''
@@ -222,7 +219,9 @@ class Grain(object):
         return self.selected
 
     # Drawing ----------------------------------------------------------------
-    def draw_axes(self, ax: mpl.axes.Axes, scale: float = 1.) -> dict[str: object]:
+    def draw_axes(self,
+                  ax: mpl.axes.Axes,
+                  scale: float = 1.) -> list[mpl.artist]:
         '''
         Draw centroid and major/minor axes on the provided matplotlib axes.
 
@@ -238,29 +237,28 @@ class Grain(object):
         artists : { name : artist }
             Dict of Matplotlib artists, named by property that they represent.
         '''
+        # Remove previously-drawn axes, if any
+        for a in self.axes:
+            a.remove()
         # Compute grain data if it hasn't been done already
-        if self.data is None:
-            image = ax.get_images()[0].get_array()
-            self.data = self.measure(image)
-        data = self.data
-        # Keep track of drawn objects
-        artists = {}
+        data = self.measure() if self.data is None else self.data
         # Centroid
         x0, y0 = data['centroid-1'] * scale, data['centroid-0'] * scale
-        artists['centroid'] = ax.plot(x0, y0, '.k')[0]
+        axes = ax.plot(x0, y0, '.k')
         # Major axis
         orientation = data['orientation']
-        x = x0 - np.sin(orientation) * 0.5 * data['major_axis_length']
-        y = y0 - np.cos(orientation) * 0.5 * data['major_axis_length']
-        artists['major'] = ax.plot((x0, x), (y0, y), '-k')[0]
+        x = x0 - np.sin(orientation) * 0.5 * data['major_axis_length'] * scale
+        y = y0 - np.cos(orientation) * 0.5 * data['major_axis_length'] * scale
+        axes += ax.plot((x0, x), (y0, y), '-k')
         # Minor axis
-        x = x0 + np.cos(orientation) * 0.5 * data['minor_axis_length']
-        y = y0 - np.sin(orientation) * 0.5 * data['minor_axis_length']
-        artists['minor'] = ax.plot((x0, x), (y0, y), '-k')[0]
-        # Return dict of artist objects, potentially useful for blitting
-        return artists
+        x = x0 + np.cos(orientation) * 0.5 * data['minor_axis_length'] * scale
+        y = y0 - np.sin(orientation) * 0.5 * data['minor_axis_length'] * scale
+        axes += ax.plot((x0, x), (y0, y), '-k')
+        # Save and return list of drawn artists
+        self.axes = axes
+        return axes
 
-    def draw_patch(self, ax: mpl.axes.Axes) -> mpatches.Polygon:
+    def draw_patch(self, ax: mpl.axes.Axes, scale: float = 1.) -> mpatches.Polygon:
         '''
         Draw this grain on the provided matplotlib axes and save the result.
 
@@ -268,6 +266,8 @@ class Grain(object):
         ----------
         ax : matplotlib.Axes
             Axes instance on which to draw this grain.
+        scale : float
+            Scaling factor, useful with downscaled GrainPlots.
 
         Returns
         -------
@@ -277,21 +277,18 @@ class Grain(object):
 
         # Create patch (filled polygon)
         (patch,) = ax.fill(
-            *self.xy,
+            *(self.xy * scale),
             edgecolor='black',
             linewidth=2.0,
             picker=True,
             animated=True,
             **self.default_props)
-        self.patch = patch
         # HACK: Save reference to parent grain within the patch itself
         patch.grain = self
         # Save assigned color (for select/unselect)
         self.default_props['facecolor'] = patch.get_facecolor()
-        # Compute grain data for the info box
-        if self.data is None:
-            image = ax.get_images()[0].get_array()
-            self.measure(image)
+        # Save and return reference to drawn patch
+        self.patch = patch
         return patch
 
 
@@ -301,13 +298,13 @@ class GrainPlot(object):
     def __init__(self,
                  grains: list = [],
                  image: np.ndarray = None,
-                 predictor=None,
+                 predictor: segment_anything.SamPredictor = None,
                  blit: bool = True,
                  px_per_m: float = 1.,       # px/m
                  scale_m: float = 1.,        # m
                  minspan: int = 10,          # px
                  image_alpha: float = 1.,
-                 image_max_size: tuple = IMAGE_MAX_SIZE,
+                 image_max_size: tuple[float, float] = IMAGE_MAX_SIZE,
                  **kwargs):
         '''
         Parameters
@@ -316,7 +313,7 @@ class GrainPlot(object):
             List of grains with xy data to plot over the backround image.
         image : np.ndarray
             Image under analysis, displayed behind identified grains.
-        predictor
+        predictor : segment_anything.SamPredictor
             SAM predictor used to create new grains.
         blit : bool, default True
             Whether to use blitting (much faster, potentially buggy).
@@ -370,11 +367,10 @@ class GrainPlot(object):
             max_size = np.asarray(image_max_size)
             if image.shape[0] > max_size[0] or image.shape[1] > max_size[1]:
                 logger.info('Downscaling large image for display...')
-                scale = np.max(max_size / image.shape[:2])
+                self.scale = np.min(max_size / image.shape[:2])
                 self.display_image = skimage.transform.rescale(
-                    image, scale, anti_aliasing=True, channel_axis=2)
-                self.scale = scale
-                logger.info(f'Downscaled image to {scale} of original.')
+                    image, self.scale, anti_aliasing=True, channel_axis=2)
+                logger.info(f'Downscaled image to {self.scale} of original.')
             # Show image
             self.ax.imshow(self.display_image, alpha=image_alpha)
             self.ax.autoscale(enable=False)
@@ -437,22 +433,25 @@ class GrainPlot(object):
             self.scale_selector.update_background = lambda *args: None
 
         # Info box
-        self.info = self.ax.annotate('',
-                                     xy=(0, 0),
-                                     xytext=(0, 0),
-                                     textcoords='offset points',
-                                     ha='center',
-                                     va='center',
-                                     bbox={'boxstyle': 'round', 'fc': 'w'},
-                                     animated=blit)
+        self.info = self.ax.annotate(
+            '',
+            xy=(0, 0),
+            xytext=(0, 0),
+            textcoords='offset points',
+            ha='center',
+            va='center',
+            bbox={'boxstyle': 'round', 'fc': 'w'},
+            animated=blit)
         self.info_grain = None
         self.info_grain_candidate = None
 
         # Draw grains and initialize plot
         logger.info('Drawing grains.')
-        self.grains = grains            # property; sets self._grains
-        for grain in tqdm(self._grains):
-            grain.draw_patch(self.ax)
+        self.grains = grains
+        for grain in tqdm(grains):
+            grain.image = image
+            grain.measure()
+            grain.draw_patch(self.ax, self.scale)
         if blit:
             self.artists = [self.info,
                             *self.box_selector.artists,
@@ -503,8 +502,15 @@ class GrainPlot(object):
         # Push to canvas
         self.canvas.blit(self.ax.bbox)
 
+    def draw_axes(self):
+        ''' Draw the major and minor axes on each grain patch. '''
+        for grain in self.grains:
+            grain.draw_axes(self.ax, self.scale)
+
     # Measurements -----------------------------------------------------------
-    def onscale(self, eclick: mpl.backend_bases.MouseEvent, erelease: mpl.backend_bases.MouseEvent):
+    def onscale(self,
+                eclick: mpl.backend_bases.MouseEvent,
+                erelease: mpl.backend_bases.MouseEvent):
         '''
         Update displayed units based on the selected scale bar length.
 
@@ -534,7 +540,7 @@ class GrainPlot(object):
         ''' Clear the grain info box. '''
         self.update_info(None)
 
-    def update_info(self, grain=None):
+    def update_info(self, grain: Grain = None):
         ''' Update info box for specified grain. '''
         # Restore proper color to previous info_grain
         old_grain = self.info_grain
@@ -556,9 +562,9 @@ class GrainPlot(object):
             return
         # Update saved info_grain
         self.info_grain = grain
-        # Set color of new grain
+        # Highlight new info_grain
         grain.patch.set_facecolor('blue')
-        # Determine box position offset based on grain's position within plot
+        # Determine info box position offset based on grain's position
         ext = grain.patch.get_extents()
         img_x, img_y = self.canvas.get_width_height()
         x = -0.1 if (ext.x1 + ext.x0) / img_x > 1 else 1.1
@@ -634,10 +640,11 @@ class GrainPlot(object):
         -------
         new_point : mpatches.Circle
         '''
-        new_point = mpatches.Circle(xy,
-                                    radius=5,
-                                    color='lime' if foreground else 'red',
-                                    animated=self.blit)
+        new_point = mpatches.Circle(
+            xy,
+            radius=5,
+            color='lime' if foreground else 'red',
+            animated=self.blit)
         self.ax.add_patch(new_point)
         self.points.append(new_point)
         self.point_labels.append(foreground)
@@ -665,39 +672,6 @@ class GrainPlot(object):
         self.clear_points()
 
     # Manage grains ----------------------------------------------------------
-    @property
-    def grains(self) -> list:
-        ''' 
-        Return copy of self.grains in full-image coordinates.
-        Necessary when full and display images are different resolutions.
-
-        Returns
-        -------
-        grains : list
-            List of saved Grains, converted to full-image coordinates.
-        '''
-        grains = self._grains.copy()
-        if self.scale != 1.:
-            for grain in grains:
-                grain.rescale(1 / self.scale)
-        return grains
-
-    @grains.setter
-    def grains(self, grains: list):
-        ''' 
-        Save copy of given grains list in display-image coordinates.
-
-        Parameters
-        ----------
-        grains : list
-            List of grains to copy, rescale, and save.
-        '''
-        grains = grains.copy()
-        if self.scale != 1.:
-            for grain in grains:
-                grain.rescale(self.scale)
-        self._grains = grains
-
     def create_grain(self) -> Grain:
         ''' 
         Attempt to detect a grain based on given prompts.
@@ -732,10 +706,9 @@ class GrainPlot(object):
             points=points,
             point_labels=point_labels)
         # Scale and record new grain (on plot, data, and undo list)
-        new_grain = Grain(coords)
-        new_grain.rescale(self.scale)
-        new_grain.draw_patch(self.ax)
-        self._grains.append(new_grain)
+        new_grain = Grain(coords, self.image)
+        new_grain.draw_patch(self.ax, self.scale)
+        self.grains.append(new_grain)
         self.created_grains.append(new_grain)
         # Clear prompts and update background
         self.clear_all()
@@ -750,8 +723,8 @@ class GrainPlot(object):
             return
         # Remove selected grains from plot, data, and undo list
         for grain in self.selected_grains:
-            grain.patch.remove()
-            self._grains.remove(grain)
+            grain.erase()
+            self.grains.remove(grain)
             if grain in self.created_grains:
                 self.created_grains.remove(grain)
         # Clear any prompts (assumed accidental) and update background
@@ -811,9 +784,9 @@ class GrainPlot(object):
             self.clear_grains()
             return
         # Make new merged grain
-        new_grain = Grain(poly.exterior.xy)
-        new_grain.draw_patch(self.ax)
-        self._grains.append(new_grain)
+        new_grain = Grain(poly.exterior.xy, self.image)
+        new_grain.draw_patch(self.ax, self.scale)
+        self.grains.append(new_grain)
         self.created_grains.append(new_grain)
         # Delete old constituent grains (since they are still selected)
         self.delete_grains()
@@ -1057,14 +1030,13 @@ def load_image(fn: str) -> np.ndarray:
 
     Returns
     -------
-    image : np.ndarray
+    np.ndarray
         Memory representation of loaded image.
     '''
-    image = np.array(keras.utils.load_img(fn))
-    return image
+    return np.array(keras.utils.load_img(fn))
 
 
-def polygons_to_grains(polygons: list) -> list:
+def polygons_to_grains(polygons: list, image: np.ndarray = None) -> list:
     ''' 
     Construct grains from a list of polygons defining grain boundaries.
 
@@ -1075,14 +1047,13 @@ def polygons_to_grains(polygons: list) -> list:
 
     Returns
     -------
-    grains : list
-        List of Grain objects.
+    list
+        Grain objects created from provided polygons.
     '''
-    grains = [Grain(np.array(p.exterior.xy)) for p in polygons]
-    return grains
+    return [Grain(np.array(p.exterior.xy), image) for p in polygons]
 
 
-def load_grains(fn: str) -> list:
+def load_grains(fn: str, image: np.ndarray = None) -> list:
     ''' 
     Construct grains from polygrons defined in a GeoJSON file.
 
@@ -1096,7 +1067,7 @@ def load_grains(fn: str) -> list:
     grains : list
         List of Grain objects.
     '''
-    grains = polygons_to_grains(segmenteverygrain.read_polygons(fn))
+    grains = polygons_to_grains(segmenteverygrain.read_polygons(fn), image)
     return grains
 
 
@@ -1154,33 +1125,47 @@ def save_summary(fn: str, grains: list, px_per_m: float = 1.):
     px_per_m: float, default 1.
         Optional conversion from pixels to meters.
     '''
-    get_summary(grains, px_per_m).to_csv(fn)
+    summary = get_summary(grains, px_per_m)
+    summary.to_csv(fn)
+    return summary
 
 
-def get_histogram(grains: list, px_per_m: float = 1.) -> tuple[object, object]:
+def get_histogram(
+        grains: list = [],
+        px_per_m: float = 1.,
+        summary: pd.DataFrame = None) -> tuple[object, object]:
     ''' 
     Produce a histogram of grain size measurements.
 
     Parameters
     ----------
-    grains : list
+    grains : list (optional, must provide summary if not given)
         List of grains to measure.
     px_per_m : float, default 1.
-        Optional conversion from pixels to meters.
+        Optional conversion from pixels to meters. Ignored if also 
+        passing a pre-generated summary.
+    summary : pd.DataFrame (optional, must provide grains if not given)
+        Grain summary, if already generated from get_summary().
 
     Returns
     -------
     fig, ax : Matplotlib elements
         Resulting Matplotlib plot.
     '''
-    df = get_summary(grains, px_per_m)
+    if isinstance(summary, type(None)):
+        summary = get_summary(grains, px_per_m)
     # plot_histogram_of_axis_lengths() takes values in mm, not m
     fig, ax = segmenteverygrain.plot_histogram_of_axis_lengths(
-        df['major_axis_length'] * 1000, df['minor_axis_length'] * 1000)
+        summary['major_axis_length'] * 1000,
+        summary['minor_axis_length'] * 1000)
     return fig, ax
 
 
-def save_histogram(fn: str, grains: list, px_per_m: float = 1.):
+def save_histogram(
+        fn: str,
+        grains: list,
+        px_per_m: float = 1.,
+        summary: pd.DataFrame = None) -> None:
     ''' 
     Save histogram of grain size measurements as an image.
 
@@ -1193,7 +1178,7 @@ def save_histogram(fn: str, grains: list, px_per_m: float = 1.):
     px_per_m: float, default 1.
         Optional conversion from pixels to meters.
     '''
-    fig, ax = get_histogram(grains, px_per_m)
+    fig, ax = get_histogram(grains, px_per_m=px_per_m, summary=summary)
     fig.savefig(fn, bbox_inches='tight', pad_inches=0)
     plt.close(fig)
 
@@ -1211,14 +1196,13 @@ def get_mask(grains: list, image: np.ndarray) -> np.ndarray:
 
     Returns
     -------
-    mask : np.ndarray
+    np.ndarray
         Binary mask image.
     '''
     polys = [g.polygon for g in grains]
     rasterized_image, mask = segmenteverygrain.create_labeled_image(
         polys, image)
-    mask = keras.utils.img_to_array(mask)
-    return mask
+    return keras.utils.img_to_array(mask)
 
 
 def save_mask(fn: str, grains: list, image: np.ndarray, scale: bool = False):
@@ -1311,7 +1295,7 @@ def filter_grains_by_props(grains: list, **props):
     return filtered_grains
 
 
-def measure_colors(image: np.ndarray, polygon: shapely.Polygon) -> dict:
+def measure_color(image: np.ndarray, polygon: shapely.Polygon) -> dict:
     '''
     Measure color intensities within a polygonal region of an image.
 
@@ -1383,12 +1367,15 @@ def measure_polygon(polygon: shapely.Polygon) -> dict:
         - 'Ixy': Product of inertia about the centroid.
         This is meant to match the output of skimage.measure.regionprops.
     '''
+    # Avoid sign errors by using consistent coordinate order
+    polygon = polygon.normalize().reverse()
+
     # Extract the exterior coordinates of the polygon
     coords = np.array(polygon.exterior.coords)
-    x = coords[:-1, 0]  # x-coordinates of vertices
-    y = coords[:-1, 1]  # y-coordinates of vertices
-    x_next = coords[1:, 0]  # x-coordinates of the next vertices
-    y_next = coords[1:, 1]  # y-coordinates of the next vertices
+    x = coords[:-1, 0]
+    y = coords[:-1, 1]
+    x_next = coords[1:, 0]
+    y_next = coords[1:, 1]
 
     # Calculate the common term for all edges
     common = x * y_next - x_next * y
@@ -1400,7 +1387,7 @@ def measure_polygon(polygon: shapely.Polygon) -> dict:
     Cx = np.sum((x + x_next) * common) / (6 * A)
     Cy = np.sum((y + y_next) * common) / (6 * A)
 
-    # Compute second moments of area about the origin
+    # Compute second moments about the origin
     Ixx_origin = np.sum((y**2 + y * y_next + y_next**2) * common) / 12
     Iyy_origin = np.sum((x**2 + x * x_next + x_next**2) * common) / 12
     Ixy_origin = np.sum((x * y_next + 2 * x * y + 2 *
@@ -1461,6 +1448,6 @@ def measure_ellipse(moments: dict) -> dict:
 
     return {
         'orientation': theta,
-        'major_axis_length': major_axis_length,  # Full length of the major axis
-        'minor_axis_length': minor_axis_length  # Full length of the minor axis
+        'major_axis_length': major_axis_length,
+        'minor_axis_length': minor_axis_length
     }
