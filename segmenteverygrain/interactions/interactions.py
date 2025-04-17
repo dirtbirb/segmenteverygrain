@@ -586,7 +586,7 @@ class GrainPlot(object):
                     f"Minor: {data['minor_axis_length']:.0f} px\n"
                     f"Area: {data['area']:.0f} px")
         else:
-            data = grain.rescale(1 / self.px_per_m, save=False)
+            data = grain.convert_units(1 / self.px_per_m)
             text = (f"Major: {data['major_axis_length']:.3} m\n"
                     f"Minor: {data['minor_axis_length']:.3} m\n"
                     f"Area: {data['area']:.3} m$^2$")
