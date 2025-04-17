@@ -1142,8 +1142,8 @@ def get_histogram(
     grains : list (optional, must provide summary if not given)
         List of grains to measure.
     px_per_m : float, default 1.
-        Optional conversion from pixels to meters. Ignored if also 
-        passing a pre-generated summary.
+        Optional conversion from pixels to meters. Ignored if also passing a
+        pre-generated summary.
     summary : pd.DataFrame (optional, must provide grains if not given)
         Grain summary, if already generated from get_summary().
 
@@ -1155,15 +1155,15 @@ def get_histogram(
     if isinstance(summary, type(None)):
         summary = get_summary(grains, px_per_m)
     # plot_histogram_of_axis_lengths() takes values in mm, not m
-    fig, ax = segmenteverygrain.plot_histogram_of_axis_lengths(
+    ret = segmenteverygrain.plot_histogram_of_axis_lengths(
         summary['major_axis_length'] * 1000,
         summary['minor_axis_length'] * 1000)
-    return fig, ax
+    return ret
 
 
 def save_histogram(
         fn: str,
-        grains: list,
+        grains: list = [],
         px_per_m: float = 1.,
         summary: pd.DataFrame = None) -> None:
     ''' 
@@ -1173,10 +1173,13 @@ def save_histogram(
     ----------
     fn : str
         Filename for image to be created. File type will be interpreted.
-    grains : list
+    grains : list (optional, must provide summary if not given)
         List of grains to represent.
     px_per_m: float, default 1.
-        Optional conversion from pixels to meters.
+        Conversion from pixels to meters. Ignored if also passing a
+        pre-generated summary.
+    summary : pd.DataFrame (optional, must provide grains if not given)
+        Grain summary, if already generated from get_summary().
     '''
     fig, ax = get_histogram(grains, px_per_m=px_per_m, summary=summary)
     fig.savefig(fn, bbox_inches='tight', pad_inches=0)
