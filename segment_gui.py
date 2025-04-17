@@ -93,14 +93,15 @@ class RootLayout(BoxLayout):
         Logger.info('SAM segmenting')
         # TODO: Separate this function into smaller chunks (plotting, mask, etc)
         # TODO: Choose min_area by image size? Do unit conversion from pixels first?
-        grains, sam_labels, mask_all, summary, self.grains_fig, ax = segmenteverygrain.sam_segmentation(
+        polys, sam_labels, mask_all, summary, self.grains_fig, ax = segmenteverygrain.sam_segmentation(
             self.sam, self.image, self.unet_image, self.unet_coords, unet_labels,
             min_area=MIN_AREA, plot_image=True, remove_edge_grains=False, remove_large_objects=False)
 
         # Process results
-        self.grains = [si.Grain(np.array(g.exterior.xy)) for g in grains]
+        self.grains = [
+            si.Grain(p.exterior.xy, self.image) for p in polys]
         for g in self.grains:
-            g.measure(self.image)
+            g.measure()
 
         # Update GUI and show save dialog
         Logger.info('Auto-segmenting complete!')
@@ -112,7 +113,7 @@ class RootLayout(BoxLayout):
         plt.close('all')
 
         # Use SEG large image prediction
-        grains, self.unet_image, self.unet_coords = segmenteverygrain.predict_large_image(
+        polys, self.unet_image, self.unet_coords = segmenteverygrain.predict_large_image(
             self.image_fn, self.unet_model, self.sam,
             min_area=MIN_AREA, patch_size=PATCH_SIZE, overlap=OVERLAP)
 
@@ -121,15 +122,15 @@ class RootLayout(BoxLayout):
             figsize=FIGSIZE)
         ax.set_aspect('equal')
         segmenteverygrain.plot_image_w_colorful_grains(
-            self.image, grains, ax, cmap='Paired')
+            self.image, polys, ax, cmap='Paired')
         ax.set(xticks=[], yticks=[])
         plt.xlim([0, np.shape(self.image)[1]])
         plt.ylim([np.shape(self.image)[0], 0])
 
         # Process results -- everything else
-        self.grains = [si.Grain(np.array(g.exterior.xy)) for g in grains]
+        self.grains = [si.Grain(p.exterior.xy, self.image) for p in polys]
         for g in self.grains:
-            g.measure(self.image)
+            g.measure()
 
         # Update GUI and show save dialog
         Logger.info('Auto-segmenting complete!')
@@ -283,12 +284,12 @@ class RootLayout(BoxLayout):
     def save_summary(self, filename, histogram=True):
         Logger.info('Saving summary data...')
         # Get measurements from plot as a DataFrame
-        si.save_summary(filename, self.grains, self.px_per_m)
+        summary = si.save_summary(filename, self.grains, self.px_per_m)
         Logger.info(f'Saved {filename}.')
         # Build and save histogram
         if histogram:
             filename = filename.split('.')[0] + '.jpg'
-            si.save_histogram(filename, self.grains, self.px_per_m)
+            si.save_histogram(filename, summary=summary)
             Logger.info(f'Saved {filename}.')
 
     def save_unet_image(self, filename):
