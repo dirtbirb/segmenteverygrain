@@ -192,7 +192,7 @@ class TestGrainPlot(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.image = si.load_image('examples/torrey_pines.jpeg')
+        cls.image = si.load_image('examples/torrey_pines.jpg')
         cls.grains = si.load_grains(
             'examples/interactive/torrey_pines_grains.geojson',
             image=cls.image)
@@ -224,7 +224,7 @@ class TestDownscaledGrainPlot(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.image = si.load_image('examples/torrey_pines.jpeg')
+        cls.image = si.load_image('examples/torrey_pines.jpg')
         cls.grains = si.load_grains(
             'examples/interactive/torrey_pines_grains.geojson',
             image=cls.image)
