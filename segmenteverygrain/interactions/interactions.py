@@ -40,7 +40,16 @@ mpatches.Polygon.grain = None
 class Grain(object):
     ''' Stores data and plot representation for a single grain. '''
 
-    def __init__(self, xy: np.ndarray, data: pd.Series = None):
+    def __deepcopy__(self, memo: dict):
+        ''' Custom deepcopy. Avoids copying the reference image. '''
+        # Create a new Grain instance
+        new_grain = self.__class__(self.xy.copy())
+        # Copy all attributes except for the image
+        for k, v in self.__dict__.items():
+            if k != 'image':
+                setattr(new_grain, k, copy.deepcopy(v, memo))
+        return new_grain
+
         '''
         Parameters
         ----------
