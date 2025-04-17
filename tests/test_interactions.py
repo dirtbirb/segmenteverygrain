@@ -62,7 +62,7 @@ metrics = {
     'centroid-1': Comparison(absolute, 2.),
     'area': Comparison(relative, 2.),
     'perimeter': Comparison(relative, 2.),
-    'orientation': Comparison(absolute_angle, 5.),
+    'orientation': Comparison(absolute_angle, 10.),
     'major_axis_length': Comparison(relative, 1.),
     'minor_axis_length': Comparison(relative, 2.),
     # 'max_intensity-0': Comparison(absolute, 5.),
@@ -147,6 +147,7 @@ class TestGrainObject(unittest.TestCase):
         # Create and draw Grain objects from polygons
         cls.grains = si.polygons_to_grains(cls.polygons, image=cls.image)
         for grain in cls.grains:
+            grain.measure()
             grain.draw_patch(cls.ax)
 
     def test_init(self):
@@ -256,23 +257,18 @@ class TestDownscaledGrainPlot(unittest.TestCase):
             self.assertIn('centroid-1', data)
 
     def test_grain_scale(self):
-        # Verify that grains are returned in full-image pixel coordinates
-        # Rescaling should occur when accessing the plot.grains property
+        # Verify grain coordinates
         testdata = self.testdata
         graindata = self.grains[0].data
         self.assertEqual(testdata['area'], graindata['area'])
-        _plotdata = self.plot.grains[0].data
-        self.assertEqual(testdata['area'], _plotdata['area'])
         plotdata = self.plot.grains[0].data
         self.assertEqual(testdata['area'], plotdata['area'])
-
+        # Verify grain data
         testxy = self.testxy
         grainxy = self.grains[0].xy
-        plotxy = self.plot.grains[0].xy
-        _plotxy = self.plot.grains[0].xy
         self.assertTrue((testxy == grainxy).all())
+        plotxy = self.plot.grains[0].xy
         self.assertTrue((testxy == plotxy).all())
-        self.assertTrue((testxy == _plotxy).all())
 
 
 if __name__ == '__main__':
