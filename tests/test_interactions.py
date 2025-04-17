@@ -261,7 +261,7 @@ class TestDownscaledGrainPlot(unittest.TestCase):
         testdata = self.testdata
         graindata = self.grains[0].data
         self.assertEqual(testdata['area'], graindata['area'])
-        _plotdata = self.plot._grains[0].data
+        _plotdata = self.plot.grains[0].data
         self.assertEqual(testdata['area'], _plotdata['area'])
         plotdata = self.plot.grains[0].data
         self.assertEqual(testdata['area'], plotdata['area'])
@@ -269,7 +269,7 @@ class TestDownscaledGrainPlot(unittest.TestCase):
         testxy = self.testxy
         grainxy = self.grains[0].xy
         plotxy = self.plot.grains[0].xy
-        _plotxy = self.plot._grains[0].xy
+        _plotxy = self.plot.grains[0].xy
         self.assertTrue((testxy == grainxy).all())
         self.assertTrue((testxy == plotxy).all())
         self.assertTrue((testxy == _plotxy).all())
