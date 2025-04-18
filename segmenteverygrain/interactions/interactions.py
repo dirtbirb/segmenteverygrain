@@ -530,7 +530,7 @@ class GrainPlot(object):
             self.scale_selector.clear()
             return
         # Convert to pixels per meter using a known scale bar length
-        px_per_m = px / self.scale_m
+        px_per_m = px / self.scale_m / self.scale
         self.px_per_m = px_per_m
         logger.info(f'Scale set to {px_per_m:f} pixels per meter.')
         # Update the info box using the new units
