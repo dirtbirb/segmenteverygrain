@@ -275,6 +275,8 @@ class Grain(object):
             Object representing this grain on the plot.
         '''
 
+        # Compute grain data if it hasn't been done already
+        data = self.measure() if self.data is None else self.data
         # Create patch (filled polygon)
         (patch,) = ax.fill(
             *(self.xy * scale),
@@ -718,9 +720,18 @@ class GrainPlot(object):
 
     def delete_grains(self):
         ''' Delete all selected grains. '''
-        # Verify that at least one grain is selected
+        # If no individual grains are selected...
         if len(self.selected_grains) < 1:
-            return
+            # Use any grains that are wholly contained in the box selector
+            if self.box_selector._selection_completed:
+                xmin, xmax, ymin, ymax = np.asarray(
+                    self.box_selector.extents) / self.scale
+                box = shapely.box(xmin, ymin, xmax, ymax)
+                self.selected_grains = [
+                    g for g in self.grains if box.contains(g.polygon)]
+            # Otherwise, exit since no grains have been indicated for deletion
+            else:
+                return
         # Remove selected grains from plot, data, and undo list
         for grain in self.selected_grains:
             grain.erase()
