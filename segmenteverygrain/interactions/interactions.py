@@ -1267,7 +1267,7 @@ def make_grid(image: np.ndarray, spacing: int) -> tuple[list, list, list]:
     return points, xs, ys
 
 
-def filter_grains_by_points(grains: list, points: list) -> tuple[list, list]:
+def filter_grains_by_points(grains: list, points: list, unique: False) -> tuple[list, list]:
     ''' 
     Generate a list of grains at specified points.
 
@@ -1277,6 +1277,9 @@ def filter_grains_by_points(grains: list, points: list) -> tuple[list, list]:
         Full list of grains in an image.
     points : list
         List of shapely.Point objects representing measurement locations.
+    unique : bool
+        Whether the returned list of grains should only contain unique items.
+        If True, will remove duplicates. Default False.
 
     Returns
     -------
@@ -1290,8 +1293,9 @@ def filter_grains_by_points(grains: list, points: list) -> tuple[list, list]:
     for point in points:
         for grain in grains.copy():
             if grain.polygon.contains(point):
-                # Remove grain from list so that it's not found twice
-                grains.remove(grain)
+                # If results should be unique, remove grain from list
+                if unique:
+                    grains.remove(grain)
                 # Save detected grain
                 point_grains.append(grain)
                 # Record that a grain was found at this point
