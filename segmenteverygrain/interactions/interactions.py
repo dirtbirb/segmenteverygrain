@@ -371,7 +371,7 @@ class GrainPlot(object):
                 logger.info('Downscaling large image for display...')
                 self.scale = np.min(max_size / image.shape[:2])
                 self.display_image = skimage.transform.rescale(
-                    image, self.scale, anti_aliasing=True, channel_axis=2)
+                    image, self.scale, anti_aliasing=False, channel_axis=2)
                 logger.info(f'Downscaled image to {self.scale} of original.')
             # Show image
             self.ax.imshow(self.display_image, alpha=image_alpha)
