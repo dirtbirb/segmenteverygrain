@@ -1288,10 +1288,10 @@ def filter_grains_by_points(grains: list, points: list, unique: False) -> tuple[
     point_found : list
         List representing whether a grain was found at each input point.
     '''
-    point_found = []
-    point_grains = []
+    point_grains, point_found = [], []
+    grains = grains.copy()
     for point in points:
-        for grain in grains.copy():
+        for grain in grains:
             if grain.polygon.contains(point):
                 # If results should be unique, remove grain from list
                 if unique:
