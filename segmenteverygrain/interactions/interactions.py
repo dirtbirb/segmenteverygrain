@@ -450,7 +450,7 @@ class GrainPlot(object):
         # Draw grains and initialize plot
         logger.info('Drawing grains.')
         self.grains = grains
-        for grain in tqdm(grains):
+        for grain in tqdm(grains, desc='Measuring and drawing grains'):
             grain.image = image
             grain.measure()
             grain.draw_patch(self.ax, self.scale)
@@ -1288,8 +1288,11 @@ def filter_grains_by_points(grains: list, points: list, unique: False) -> tuple[
     point_found : list
         List representing whether a grain was found at each input point.
     '''
+    # Don't modify original list when removing grains with unique == True
+    if unique:
+        grains = grains.copy()
+    # Find grains at given points
     point_grains, point_found = [], []
-    grains = grains.copy()
     for point in points:
         for grain in grains:
             if grain.polygon.contains(point):
@@ -1298,11 +1301,11 @@ def filter_grains_by_points(grains: list, points: list, unique: False) -> tuple[
                     grains.remove(grain)
                 # Save detected grain
                 point_grains.append(grain)
-                # Record that a grain was found at this point
+                # Grain found
                 point_found.append(True)
                 break
         else:
-            # Record that no grain was found at this point
+            # Grain not found
             point_found.append(False)
     return point_grains, point_found
 
