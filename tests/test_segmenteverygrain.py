@@ -8,6 +8,7 @@ from shapely.geometry import Polygon
 import tensorflow as tf
 # Local imports
 import segmenteverygrain as seg
+import tensorflow as tf
 
 
 class TestGetGrainsFromPatches(unittest.TestCase):
@@ -22,15 +23,16 @@ class TestGetGrainsFromPatches(unittest.TestCase):
             MplPolygon(
                 np.array([[10, 10], [20, 10], [20, 20], [10, 20]]), closed=True),
             MplPolygon(
-                np.array([[30, 30], [40, 30], [40, 40], [30, 40]]), closed=True)
+                np.array([[30, 30], [40, 30], [40, 40], [30, 40]]), closed=True),
         ]
         for patch in self.patches:
             self.ax.add_patch(patch)
-        plt.axis('equal')
+        plt.axis("equal")
 
     def test_get_grains_from_patches(self):
         all_grains, rasterized, mask_all = seg.get_grains_from_patches(
-            self.ax, self.image)
+            self.ax, self.image
+        )
 
         # Check the number of grains
         self.assertEqual(len(all_grains), len(self.patches))
@@ -58,7 +60,7 @@ class TestRasterizeGrains(unittest.TestCase):
         # Create mock grains
         self.grains = [
             Polygon([(10, 10), (20, 10), (20, 20), (10, 20)]),
-            Polygon([(30, 30), (40, 30), (40, 40), (30, 40)])
+            Polygon([(30, 30), (40, 30), (40, 40), (30, 40)]),
         ]
 
     def test_rasterize_grains_shape(self):
@@ -171,14 +173,15 @@ class TestFindOverlappingPolygons(unittest.TestCase):
     def setUp(self):
         # Create some mock polygons
         self.polygons = [
-            # Polygon 1
-            Polygon([(0, 0), (2, 0), (2, 2), (0, 2)]),
-            # Polygon 2 (overlaps with Polygon 1)
-            Polygon([(0.5, 0.5), (2.5, 0.5), (2.5, 2.5), (0.5, 2.5)]),
+            Polygon([(0, 0), (2, 0), (2, 2), (0, 2)]),  # Polygon 1
+            Polygon(
+                [(0.5, 0.5), (2.5, 0.5), (2.5, 2.5), (0.5, 2.5)]
+            ),  # Polygon 2 (overlaps with Polygon 1)
             # Polygon 3 (no overlap)
             Polygon([(4, 4), (6, 4), (6, 6), (4, 6)]),
-            # Polygon 4 (overlaps with Polygon 3)
-            Polygon([(4.5, 4.5), (6.5, 4.5), (6.5, 6.5), (4.5, 6.5)])
+            Polygon(
+                [(4.5, 4.5), (6.5, 4.5), (6.5, 6.5), (4.5, 6.5)]
+            ),  # Polygon 4 (overlaps with Polygon 3)
         ]
 
     def test_find_overlapping_polygons(self):
@@ -194,7 +197,7 @@ class TestFindOverlappingPolygons(unittest.TestCase):
     def test_no_overlapping_polygons(self):
         non_overlapping_polygons = [
             Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]),
-            Polygon([(2, 2), (3, 2), (3, 3), (2, 3)])
+            Polygon([(2, 2), (3, 2), (3, 3), (2, 3)]),
         ]
         overlapping_polygons = seg.find_overlapping_polygons(
             non_overlapping_polygons)
@@ -206,7 +209,7 @@ class TestFindOverlappingPolygons(unittest.TestCase):
         all_overlapping_polygons = [
             Polygon([(0.5, 0.5), (3.5, 0.5), (3.5, 3.5), (0.5, 3.5)]),
             Polygon([(1, 1), (4, 1), (4, 4), (1, 4)]),
-            Polygon([(1.5, 1.5), (4.5, 1.5), (4.5, 4.5), (1.5, 4.5)])
+            Polygon([(1.5, 1.5), (4.5, 1.5), (4.5, 4.5), (1.5, 4.5)]),
         ]
         overlapping_polygons = seg.find_overlapping_polygons(
             all_overlapping_polygons)
@@ -232,25 +235,56 @@ class TestUnet(unittest.TestCase):
     def test_unet_layer_names(self):
         model = seg.Unet()
         expected_layer_names = [
-            'input', 'conv2d', 'conv2d_1', 'batch_normalization', 'max_pooling2d',
-            'conv2d_2', 'conv2d_3', 'batch_normalization_1', 'max_pooling2d_1',
-            'conv2d_4', 'conv2d_5', 'batch_normalization_2', 'max_pooling2d_2',
-            'conv2d_6', 'conv2d_7', 'batch_normalization_3', 'max_pooling2d_3',
-            'conv2d_8', 'conv2d_9', 'batch_normalization_4', 'conv2d_transpose',
-            'concatenate', 'conv2d_10', 'conv2d_11', 'batch_normalization_5',
-            'conv2d_transpose_1', 'concatenate_1', 'conv2d_12', 'conv2d_13',
-            'batch_normalization_6', 'conv2d_transpose_2', 'concatenate_2',
-            'conv2d_14', 'conv2d_15', 'batch_normalization_7', 'conv2d_transpose_3',
-            'concatenate_3', 'conv2d_16', 'conv2d_17', 'batch_normalization_8',
-            'conv2d_18'
+            "input",
+            "conv2d",
+            "conv2d_1",
+            "batch_normalization",
+            "max_pooling2d",
+            "conv2d_2",
+            "conv2d_3",
+            "batch_normalization_1",
+            "max_pooling2d_1",
+            "conv2d_4",
+            "conv2d_5",
+            "batch_normalization_2",
+            "max_pooling2d_2",
+            "conv2d_6",
+            "conv2d_7",
+            "batch_normalization_3",
+            "max_pooling2d_3",
+            "conv2d_8",
+            "conv2d_9",
+            "batch_normalization_4",
+            "conv2d_transpose",
+            "concatenate",
+            "conv2d_10",
+            "conv2d_11",
+            "batch_normalization_5",
+            "conv2d_transpose_1",
+            "concatenate_1",
+            "conv2d_12",
+            "conv2d_13",
+            "batch_normalization_6",
+            "conv2d_transpose_2",
+            "concatenate_2",
+            "conv2d_14",
+            "conv2d_15",
+            "batch_normalization_7",
+            "conv2d_transpose_3",
+            "concatenate_3",
+            "conv2d_16",
+            "conv2d_17",
+            "batch_normalization_8",
+            "conv2d_18",
         ]
         actual_layer_names = [layer.name for layer in model.layers]
         self.assertEqual(actual_layer_names, expected_layer_names)
 
     def test_unet_compile(self):
         model = seg.Unet()
-        model.compile(optimizer='adam',
-                      loss='categorical_crossentropy', metrics=['accuracy'])
+        model.compile(
+            optimizer="adam", loss="categorical_crossentropy", metrics=["accuracy"]
+        )
         self.assertIsNotNone(model.optimizer)
         self.assertIsNotNone(model.loss)
         self.assertIsNotNone(model.metrics)
@@ -262,7 +296,8 @@ class TestWeightedCrossentropy(unittest.TestCase):
         y_true = tf.constant(
             [[[[1, 0, 0], [0, 1, 0], [0, 0, 1]]]], dtype=tf.float32)
         y_pred = tf.constant(
-            [[[[2.0, 1.0, 0.1], [0.5, 2.0, 0.5], [0.1, 0.5, 2.0]]]], dtype=tf.float32)
+            [[[[2.0, 1.0, 0.1], [0.5, 2.0, 0.5], [0.1, 0.5, 2.0]]]], dtype=tf.float32
+        )
         loss = seg.weighted_crossentropy(y_true, y_pred)
         self.assertEqual(loss.shape, ())
 
@@ -270,7 +305,8 @@ class TestWeightedCrossentropy(unittest.TestCase):
         y_true = tf.constant(
             [[[[1, 0, 0], [0, 1, 0], [0, 0, 1]]]], dtype=tf.float32)
         y_pred = tf.constant(
-            [[[[2.0, 1.0, 0.1], [0.5, 2.0, 0.5], [0.1, 0.5, 2.0]]]], dtype=tf.float32)
+            [[[[2.0, 1.0, 0.1], [0.5, 2.0, 0.5], [0.1, 0.5, 2.0]]]], dtype=tf.float32
+        )
         loss = seg.weighted_crossentropy(y_true, y_pred)
         expected_loss = 0.7343642  # Precomputed expected loss value
         self.assertAlmostEqual(loss.numpy(), expected_loss, places=5)
@@ -282,10 +318,12 @@ class TestCalculateIoU(unittest.TestCase):
         # Create some mock polygons
         self.poly1 = Polygon(
             [(0, 0), (2, 0), (2, 2), (0, 2)])  # Square polygon
-        # Overlapping square polygon
-        self.poly2 = Polygon([(1, 1), (3, 1), (3, 3), (1, 3)])
-        # Non-overlapping square polygon
-        self.poly3 = Polygon([(3, 3), (5, 3), (5, 5), (3, 5)])
+        self.poly2 = Polygon(
+            [(1, 1), (3, 1), (3, 3), (1, 3)]
+        )  # Overlapping square polygon
+        self.poly3 = Polygon(
+            [(3, 3), (5, 3), (5, 5), (3, 5)]
+        )  # Non-overlapping square polygon
         # Larger square polygon
         self.poly4 = Polygon([(0, 0), (4, 0), (4, 4), (0, 4)])
 
@@ -314,12 +352,14 @@ class TestPickMostSimilarPolygon(unittest.TestCase):
         # Create some mock polygons
         self.polygons = [
             Polygon([(0, 0), (2, 0), (2, 2), (0, 2)]),  # Polygon 1
-            # Polygon 2 (overlaps with Polygon 1)
-            Polygon([(0.5, 0.5), (2.5, 0.5), (2.5, 2.5), (0.5, 2.5)]),
+            Polygon(
+                [(0.5, 0.5), (2.5, 0.5), (2.5, 2.5), (0.5, 2.5)]
+            ),  # Polygon 2 (overlaps with Polygon 1)
             # Polygon 3 (no overlap)
             Polygon([(4, 4), (6, 4), (6, 6), (4, 6)]),
-            # Polygon 4 (overlaps with Polygon 3)
-            Polygon([(4.5, 4.5), (6.5, 4.5), (6.5, 6.5), (4.5, 6.5)])
+            Polygon(
+                [(4.5, 4.5), (6.5, 4.5), (6.5, 6.5), (4.5, 6.5)]
+            ),  # Polygon 4 (overlaps with Polygon 3)
         ]
 
     def test_pick_most_similar_polygon(self):
@@ -328,15 +368,15 @@ class TestPickMostSimilarPolygon(unittest.TestCase):
         # Check that the most similar polygon is one of the input polygons
         self.assertIn(most_similar_polygon, self.polygons)
 
-        # Check that the most similar polygon is the one with the highest
-        # average IoU precomputed expected most similar polygon
+        # Check that the most similar polygon is the one with the highest average IoU
+        # Precomputed expected most similar polygon
         expected_polygon = self.polygons[0]
         self.assertEqual(most_similar_polygon, expected_polygon)
 
     def test_pick_most_similar_polygon_no_overlap(self):
         non_overlapping_polygons = [
             Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]),
-            Polygon([(2, 2), (3, 2), (3, 3), (2, 3)])
+            Polygon([(2, 2), (3, 2), (3, 3), (2, 3)]),
         ]
         most_similar_polygon = seg.pick_most_similar_polygon(
             non_overlapping_polygons)
@@ -344,15 +384,16 @@ class TestPickMostSimilarPolygon(unittest.TestCase):
         # Check that the most similar polygon is one of the input polygons
         self.assertIn(most_similar_polygon, non_overlapping_polygons)
 
-        # Check that the most similar polygon is the one with the highest
-        # average IoU precomputed expected most similar polygon
-        expected_polygon = non_overlapping_polygons[0]
+        # Check that the most similar polygon is the one with the highest average IoU
+        expected_polygon = non_overlapping_polygons[
+            0
+        ]  # Precomputed expected most similar polygon
         self.assertEqual(most_similar_polygon, expected_polygon)
 
     def test_pick_most_similar_polygon_identical(self):
         identical_polygons = [
             Polygon([(0, 0), (2, 0), (2, 2), (0, 2)]),
-            Polygon([(0, 0), (2, 0), (2, 2), (0, 2)])
+            Polygon([(0, 0), (2, 0), (2, 2), (0, 2)]),
         ]
         most_similar_polygon = seg.pick_most_similar_polygon(
             identical_polygons)
@@ -360,9 +401,10 @@ class TestPickMostSimilarPolygon(unittest.TestCase):
         # Check that the most similar polygon is one of the input polygons
         self.assertIn(most_similar_polygon, identical_polygons)
 
-        # Check that the most similar polygon is the one with the highest
-        # average IoU precomputed expected most similar polygon
-        expected_polygon = identical_polygons[0]
+        # Check that the most similar polygon is the one with the highest average IoU
+        expected_polygon = identical_polygons[
+            0
+        ]  # Precomputed expected most similar polygon
         self.assertEqual(most_similar_polygon, expected_polygon)
 
 
@@ -371,56 +413,74 @@ class TestFindConnectedComponents(unittest.TestCase):
     def setUp(self):
         # Create some mock polygons
         self.polygons = [
-            # Polygon 1 (overlaps with Polygon 2)
-            Polygon([(0, 0), (2, 0), (2, 2), (0, 2)]),
-            # Polygon 2 (overlaps with Polygon 1)
-            Polygon([(0.5, 0.5), (2.5, 0.5), (2.5, 2.5), (0.5, 2.5)]),
-            # Polygon 3 (overlaps with Polygon 4)
-            Polygon([(4, 4), (6, 4), (6, 6), (4, 6)]),
-            # Polygon 4 (overlaps with Polygon 3)
-            Polygon([(4.5, 4.5), (6.5, 4.5), (6.5, 6.5), (4.5, 6.5)]),
+            Polygon(
+                [(0, 0), (2, 0), (2, 2), (0, 2)]
+            ),  # Polygon 1 (overlaps with Polygon 2)
+            Polygon(
+                [(0.5, 0.5), (2.5, 0.5), (2.5, 2.5), (0.5, 2.5)]
+            ),  # Polygon 2 (overlaps with Polygon 1)
+            Polygon(
+                [(4, 4), (6, 4), (6, 6), (4, 6)]
+            ),  # Polygon 3 (overlaps with Polygon 4)
+            Polygon(
+                [(4.5, 4.5), (6.5, 4.5), (6.5, 6.5), (4.5, 6.5)]
+            ),  # Polygon 4 (overlaps with Polygon 3)
             # Polygon 5 (no overlap)
-            Polygon([(4, 0), (6, 0), (6, 2), (4, 2)])
+            Polygon([(4, 0), (6, 0), (6, 2), (4, 2)]),
         ]
 
     def test_find_connected_components(self):
         new_grains, comps, g = seg.find_connected_components(
-            self.polygons, min_area=1.0)
+            self.polygons, min_area=1.0
+        )
+
         # Check the number of new grains
         self.assertEqual(len(new_grains), 1)
+
         # Check the number of connected components
         self.assertEqual(len(comps), 2)
+
         # Check the nodes in the graph
         self.assertEqual(len(g.nodes), 4)
+
         # Check the edges in the graph
         self.assertEqual(len(g.edges), 2)
 
     def test_find_connected_components_with_min_area(self):
         new_grains, comps, g = seg.find_connected_components(
-            self.polygons, min_area=2.0)
+            self.polygons, min_area=2.0
+        )
+
         # Check the number of new grains
         self.assertEqual(len(new_grains), 1)
+
         # Check the number of connected components
         self.assertEqual(len(comps), 2)
+
         # Check the nodes in the graph
         self.assertEqual(len(g.nodes), 4)
+
         # Check the edges in the graph
         self.assertEqual(len(g.edges), 2)
 
     def test_find_connected_components_no_overlap(self):
         non_overlapping_polygons = [
             Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]),
-            Polygon([(2, 2), (3, 2), (3, 3), (2, 3)])
+            Polygon([(2, 2), (3, 2), (3, 3), (2, 3)]),
         ]
         new_grains, comps, g = seg.find_connected_components(
-            non_overlapping_polygons, min_area=0.5)
+            non_overlapping_polygons, min_area=0.5
+        )
 
         # Check the number of new grains
         self.assertEqual(len(new_grains), 2)
+
         # Check the number of connected components
         self.assertEqual(len(comps), 0)
+
         # Check the nodes in the graph
         self.assertEqual(len(g.nodes), 0)
+
         # Check the edges in the graph
         self.assertEqual(len(g.edges), 0)
 
@@ -431,10 +491,12 @@ class TestMergeOverlappingPolygons(unittest.TestCase):
         # Create some mock polygons
         self.poly1 = Polygon(
             [(0, 0), (2, 0), (2, 2), (0, 2)])  # Square polygon
-        # Overlapping square polygon
-        self.poly2 = Polygon([(1, 1), (3, 1), (3, 3), (1, 3)])
-        # Non-overlapping square polygon
-        self.poly3 = Polygon([(3, 3), (5, 3), (5, 5), (3, 5)])
+        self.poly2 = Polygon(
+            [(1, 1), (3, 1), (3, 3), (1, 3)]
+        )  # Overlapping square polygon
+        self.poly3 = Polygon(
+            [(3, 3), (5, 3), (5, 5), (3, 5)]
+        )  # Non-overlapping square polygon
         # Larger square polygon
         self.poly4 = Polygon([(0, 0), (4, 0), (4, 4), (0, 4)])
         self.all_grains = [self.poly1, self.poly2, self.poly3, self.poly4]
@@ -445,7 +507,8 @@ class TestMergeOverlappingPolygons(unittest.TestCase):
 
     def test_merge_overlapping_polygons(self):
         merged_grains = seg.merge_overlapping_polygons(
-            self.all_grains, self.new_grains, self.comps, self.min_area, self.image_pred)
+            self.all_grains, self.new_grains, self.comps, self.min_area, self.image_pred
+        )
         self.assertEqual(len(merged_grains), 2)
         self.assertTrue(any(poly.equals(self.poly1) for poly in merged_grains))
         self.assertTrue(any(poly.equals(self.poly3) for poly in merged_grains))
@@ -455,7 +518,8 @@ class TestMergeOverlappingPolygons(unittest.TestCase):
     def test_merge_overlapping_polygons_min_area(self):
         min_area = 5.0
         merged_grains = seg.merge_overlapping_polygons(
-            self.all_grains, self.new_grains, self.comps, min_area, self.image_pred)
+            self.all_grains, self.new_grains, self.comps, min_area, self.image_pred
+        )
         self.assertEqual(len(merged_grains), 2)
         self.assertTrue(any(poly.equals(self.poly1) for poly in merged_grains))
         self.assertTrue(any(poly.equals(self.poly3) for poly in merged_grains))
@@ -465,12 +529,13 @@ class TestMergeOverlappingPolygons(unittest.TestCase):
             Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]),
             Polygon([(1, 1), (2, 1), (2, 2), (1, 2)]),
             Polygon([(2, 2), (3, 2), (3, 3), (2, 3)]),
-            Polygon([(2.1, 2.1), (3.1, 2.1), (3.1, 3.1), (2.1, 3.1)])
+            Polygon([(2.1, 2.1), (3.1, 2.1), (3.1, 3.1), (2.1, 3.1)]),
         ]
         comps = [{2, 3}]
         new_grains = polygons[:2]
         merged_grains = seg.merge_overlapping_polygons(
-            polygons, new_grains, comps, 0.5, self.image_pred)
+            polygons, new_grains, comps, 0.5, self.image_pred
+        )
         self.assertEqual(len(merged_grains), 3)
         self.assertTrue(
             any(poly.equals(polygons[0]) for poly in merged_grains))
@@ -488,7 +553,8 @@ class TestMergeOverlappingPolygons(unittest.TestCase):
         new_grains = []
         comps = [{0, 1, 2, 3, 4}]
         merged_grains = seg.merge_overlapping_polygons(
-            all_grains, new_grains, comps, self.min_area, self.image_pred)
+            all_grains, new_grains, comps, self.min_area, self.image_pred
+        )
         self.assertEqual(len(merged_grains), 1)
         self.assertTrue(any(poly.equals(self.poly4) for poly in merged_grains))
 
@@ -532,5 +598,5 @@ class TestClassifyPoints(unittest.TestCase):
         self.assertEqual(classifications, [0, 0, 1, 1])
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
