@@ -11,10 +11,8 @@ shapely
 pip
 pillow
 rasterio
-opencv-python
 rtree
 tensorflow
 torch
 torchvision
 segment-anything
-segmenteverygrain
