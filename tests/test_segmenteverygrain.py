@@ -226,8 +226,8 @@ class TestUnet(unittest.TestCase):
         model = seg.Unet()
         input_shape = (1, 256, 256, 3)
         dummy_input = np.zeros(input_shape, dtype=np.float32)
-        output = model.predict(dummy_input)
-        self.assertEqual(output.shape, (1, 256, 256, 3))
+        output = model.predict([dummy_input])
+        self.assertEqual(output.shape, input_shape)
 
     def test_unet_layer_names(self):
         model = seg.Unet()
