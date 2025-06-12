@@ -2,6 +2,7 @@ numpy
 matplotlib
 pandas
 jupyterlab
+opencv-python
 scipy
 scikit-image
 scikit-learn
