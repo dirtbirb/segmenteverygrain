@@ -1313,7 +1313,12 @@ def make_grid(image: np.ndarray, spacing: int) -> tuple[list, list, list]:
     return points, xs, ys
 
 
-def filter_grains_by_points(grains: list, points: list, unique: False) -> tuple[list, list]:
+def filter_grains_by_points(
+    grains: list,
+    points: list,
+    radius: int = 0,
+    unique: bool = False
+) -> tuple[list, list]:
     ''' 
     Generate a list of grains at specified points.
 
@@ -1323,6 +1328,9 @@ def filter_grains_by_points(grains: list, points: list, unique: False) -> tuple[
         Full list of grains in an image.
     points : list
         List of shapely.Point objects representing measurement locations.
+    radius : int, default = 0
+        If a point does not fall on a grain, find the nearest grain within
+        this distance (in pixels).
     unique : bool
         Whether the returned list of grains should only contain unique items.
         If True, will remove duplicates. Default False.
@@ -1340,8 +1348,12 @@ def filter_grains_by_points(grains: list, points: list, unique: False) -> tuple[
     # Find grains at given points
     point_grains, point_found = [], []
     for point in points:
+        # Check every grain against this point
+        closest_grain, closest_dist = None, np.inf
         for grain in grains:
-            if grain.polygon.contains(point):
+            dist = grain.polygon.distance(point)
+            # If point is in this grain, use that grain
+            if dist == 0.:
                 # If results should be unique, remove grain from list
                 if unique:
                     grains.remove(grain)
@@ -1350,9 +1362,20 @@ def filter_grains_by_points(grains: list, points: list, unique: False) -> tuple[
                 # Grain found
                 point_found.append(True)
                 break
+            # Otherwise, see if this is the closest grain so far
+            elif dist < closest_dist:
+                closest_grain, closest_dist = grain, dist
+        # If point is not inside any grains...
         else:
-            # Grain not found
-            point_found.append(False)
+            # Use the closest grain if it's within the given radius
+            if closest_dist < radius:
+                if unique:
+                    grains.remove(grain)
+                point_grains.append(closest_grain)
+                point_found.append(True)
+            # Otherwise, record a miss
+            else:
+                point_found.append(False)
     return point_grains, point_found
 
 
