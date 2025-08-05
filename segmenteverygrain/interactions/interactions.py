@@ -1285,7 +1285,11 @@ def save_mask(fn: str, grains: list, image: np.ndarray, scale: bool = False):
 
 # Point count ----------------------------------------------------------------
 
-def make_grid(image: np.ndarray, spacing: int) -> tuple[list, list, list]:
+def make_grid(
+    image: np.ndarray,
+    spacing: int,
+    offset: any = 0
+) -> tuple[list, list, list]:
     ''' 
     Construct a grid of measurement points given an image and spacing.
 
@@ -1295,6 +1299,9 @@ def make_grid(image: np.ndarray, spacing: int) -> tuple[list, list, list]:
         Original image.
     spacing : int
         Spacing between measurement points.
+    offset : any, default 0
+        Optional offset, in pixels. Numeric values offset both x and y,
+        otherwise can specify x and y separately as a tuple.
 
     Returns
     -------
@@ -1303,11 +1310,22 @@ def make_grid(image: np.ndarray, spacing: int) -> tuple[list, list, list]:
     xs, ys : lists
         Lists of point coordinates (for convenience).
     '''
+    # Parse offset
+    if np.isscalar(offset):
+        # If single number, use it for both x and y
+        offset_x = offset_y = round(offset)
+    elif isinstance(offset, tuple):
+        # If tuple, assume it's (x, y)
+        offset_x, offset_y = offset
+    else:
+        # Otherwise, raise error
+        raise ValueError("Offset must be numeric or a tuple of two values.")
+    # Generate grid
     img_y, img_x = image.shape[:2]
     pad_x = img_x % spacing
     pad_y = img_y % spacing
-    x_vals = np.arange(round(pad_x / 2), img_x, spacing)
-    y_vals = np.arange(round(pad_y / 2), img_y, spacing)
+    x_vals = np.arange(round(pad_x / 2) + offset_x, img_x, spacing)
+    y_vals = np.arange(round(pad_y / 2) - offset_y, img_y, spacing)
     xs, ys = np.meshgrid(x_vals, y_vals)
     points = shapely.points(xs, ys).flatten()
     return points, xs, ys
