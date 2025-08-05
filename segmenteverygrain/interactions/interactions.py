@@ -1314,7 +1314,7 @@ def make_grid(
     if np.isscalar(offset):
         # If single number, use it for both x and y
         offset_x = offset_y = round(offset)
-    elif isinstance(offset, tuple):
+    elif isinstance(offset, tuple) and len(offset) == 2:
         # If tuple, assume it's (x, y)
         offset_x, offset_y = offset
     else:
