@@ -1342,37 +1342,39 @@ def filter_grains_by_points(
     point_found : list
         List representing whether a grain was found at each input point.
     '''
+
+    def pick_grain(grain: Grain):
+        ''' Select a grain for the output list. '''
+        # If results should be unique, remove grain from input list
+        if unique:
+            grains.remove(grain)
+        # Save detected grain to output list of grains
+        point_grains.append(grain)
+        # Indicate a hit for the current point
+        point_found.append(True)
+
     # Don't modify original list when removing grains with unique == True
     if unique:
         grains = grains.copy()
     # Find grains at given points
     point_grains, point_found = [], []
     for point in points:
-        # Check every grain against this point
+        # Check distance from this point to each grain
         closest_grain, closest_dist = None, np.inf
         for grain in grains:
             dist = grain.polygon.distance(point)
-            # If point is in this grain, use that grain
+            # If point is in this grain, pick that grain
             if dist == 0.:
-                # If results should be unique, remove grain from list
-                if unique:
-                    grains.remove(grain)
-                # Save detected grain
-                point_grains.append(grain)
-                # Grain found
-                point_found.append(True)
+                pick_grain(grain)
                 break
-            # Otherwise, see if this is the closest grain so far
+            # Otherwise, see if this is the nearest grain so far
             elif dist < closest_dist:
                 closest_grain, closest_dist = grain, dist
         # If point is not inside any grains...
         else:
-            # Use the closest grain if it's within the given radius
+            # Use the nearest grain if it's within the given radius
             if closest_dist < radius:
-                if unique:
-                    grains.remove(grain)
-                point_grains.append(closest_grain)
-                point_found.append(True)
+                pick_grain(grain)
             # Otherwise, record a miss
             else:
                 point_found.append(False)
