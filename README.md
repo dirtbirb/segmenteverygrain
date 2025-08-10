@@ -1,6 +1,6 @@
 # segmenteverygrain
 
-<img src="docs/gravel_example_mask.png" width="600">
+<img src="docs/source/_static/images/gravel_example_mask.png" width="600">
 
 ## Description
 
@@ -15,7 +15,7 @@ This unofficial fork attempts to build on the core features of segmenteverygrain
 
 ### Automated grain detection
 
-<img src="docs/auto.jpg" width="600">
+<img src="docs/source/_static/images/auto.jpg" width="600">
 
 The original automated grain detection and segmentation process as laid out in [Segment_every_grain.ipynb](segmenteverygrain/Segment_every_grain.ipynb) has not been significantly modified except for how results are saved. The notebook itself has not been modified at all.
 
@@ -24,7 +24,7 @@ The original automated grain detection and segmentation process as laid out in [
 
 ### Interactive interface
 
-<img src="docs/interactive.jpg" width="600">
+<img src="docs/source/_static/images/interactive.jpg" width="600">
 
 The original manual editing interface has been modified to facilitate:
 
@@ -54,7 +54,7 @@ Run the new interactive interface using the [interactive_edit.ipynb](interactive
 
 ### Automated grid count
 
-<img src="docs/grid_count.jpg" width="600">
+<img src="docs/source/_static/images/grid_count.jpg" width="600">
 
 The results of segmenteverygrain can be used to simulate the results of a manual grid count. This provides less information than segmentation of a complete image, but is more comparable to traditional methods. Currently there is no fine-grain cutoff threshold. Some configuation options include:
 - When multiple grid points land on the same grain, the report can contain only instance of that grain, or count it once for each point.
@@ -66,7 +66,7 @@ After using segmenteverygrain to generate a grain info (.geojson) file, generate
 
 ### Graphical interface (experimental)
 
-<img src="docs/gui.jpg" width="600">
+<img src="docs/source/_static/images/gui.jpg" width="600">
 
 The core functions of segmenteverygrain have been wrapped into an optional, experimental GUI in order to provide a user-friendly experience.
 
